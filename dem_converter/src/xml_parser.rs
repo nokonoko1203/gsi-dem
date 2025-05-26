@@ -1,18 +1,15 @@
 //! # XML Parser Module
 //!
 //! This module is responsible for parsing Digital Elevation Model (DEM) data
-//! from XML files. It is designed with the expectation of a GML-like (Geography
-//! Markup Language) structure, commonly used for geospatial data.
+//! from XML files that conform to a specific JPGIS (Japan Profile for Geographic
+//! Information Standards) GML structure.
 //!
 //! The primary function [`parse_dem_xml`] attempts to extract metadata and elevation
-//! values from the XML content. Due to the lack of specific schemas or official
-//! sample files for some DEM formats (e.g., Japanese GSI DEM XML), the parsing
-//! logic is **speculative** and based on common GML patterns.
-//!
-//! Users should be aware that this parser might require adjustments if the input
-//! XML deviates significantly from the anticipated GML structure.
+//! values from the XML content based on a user-provided specification and sample XML.
+//! While tailored to this specification, users should be aware that deviations from
+//! this precise structure might lead to parsing errors.
 
-use quick_xml::events::{Event, BytesStart};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use crate::{DemData, DemMetadata};
 use log::{debug, warn, error};
@@ -23,26 +20,32 @@ use log::{debug, warn, error};
 ///
 /// # Arguments
 /// * `reader` - A mutable reference to the `quick_xml::Reader`.
-/// * `_event` - The `BytesStart` of the element from which text is being extracted (currently unused but kept for context).
+/// * `tag_name_for_error` - The name of the tag being processed, for error reporting.
 ///
 /// # Returns
 /// A `Result` containing the unescaped text content as a `String`, or an error message `String`
 /// if reading/parsing fails or EOF is unexpectedly reached.
-fn get_text_from_event(reader: &mut Reader<&[u8]>, _event: &BytesStart) -> Result<String, String> {
+fn get_text_from_event(reader: &mut Reader<&[u8]>, tag_name_for_error: &[u8]) -> Result<String, String> {
     let mut buf = Vec::new();
     let mut txt_buf = Vec::new();
-    debug!("Attempting to extract text from current XML element.");
+    debug!("Attempting to extract text from current XML element: {:?}", String::from_utf8_lossy(tag_name_for_error));
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => txt_buf.extend_from_slice(e.unescape().as_ref()),
             Ok(Event::End(_)) | Ok(Event::Empty(_)) => break,
             Ok(Event::Eof) => {
-                let err_msg = "Unexpected EOF while reading text content within an element.".to_string();
+                let err_msg = format!(
+                    "XML Parse Error: Unexpected EOF while reading text content for tag <{}>.",
+                    String::from_utf8_lossy(tag_name_for_error)
+                );
                 error!("{}", err_msg);
                 return Err(err_msg);
             }
             Err(e) => {
-                let err_msg = format!("XML Read Error: Error reading text content: {}", e);
+                let err_msg = format!(
+                    "XML Read Error: Error reading text content for tag <{}>: {}",
+                    String::from_utf8_lossy(tag_name_for_error), e
+                );
                 error!("{}", err_msg);
                 return Err(err_msg);
             }
@@ -51,43 +54,40 @@ fn get_text_from_event(reader: &mut Reader<&[u8]>, _event: &BytesStart) -> Resul
         buf.clear();
     }
     String::from_utf8(txt_buf).map_err(|e| {
-        let err_msg = format!("XML Parse Error: Failed to parse text content as UTF-8: {}", e);
+        let err_msg = format!(
+            "XML Parse Error: Failed to parse text content for tag <{}> as UTF-8: {}",
+            String::from_utf8_lossy(tag_name_for_error), e
+        );
         error!("{}", err_msg);
         err_msg
     })
 }
 
-
-/// Parses DEM XML content into a `DemData` struct.
-///
-/// **Note:** This parser is based on speculative assumptions about common GML/JPGIS XML structures
 /// Parses DEM (Digital Elevation Model) data from an XML string into a [`DemData`] struct.
 ///
-/// This function employs a speculative parsing approach based on common GML (Geography Markup Language)
-/// patterns typically found in DEM XML files. It is designed to be somewhat flexible but may
-/// require adjustments for XML structures that deviate significantly from these patterns.
+/// This function is specifically designed to parse XML files conforming to the
+/// JPGIS (Japan Profile for Geographic Information Standards) GML structure,
+/// based on a user-provided specification.
 ///
-/// ## Expected XML Structure Highlights:
+/// ## Expected XML Structure:
 ///
-/// The parser looks for elements like (case-insensitive local names, common prefixes `gml:`, `jps:`):
-/// *   **Grid Dimensions & Extent:**
-///     *   `<gml:GridEnvelope>` with `<gml:high>` (for width, height).
-///     *   `<gml:boundedBy>` containing `<gml:Envelope>`.
-///     *   `<gml:Envelope>` with `<gml:lowerCorner>` (x_min, y_min_temp) and `<gml:upperCorner>` (x_max_temp, y_max).
-///     *   `srsName` attributes on `<gml:Envelope>` or other relevant elements for CRS.
-/// *   **Cell Size:**
-///     *   `<gml:offsetVector>` (for cell_size_x, cell_size_y).
-/// *   **Elevation Data:**
-///     *   `<gml:rangeSet>` / `<gml:DataBlock>` containing `<gml:tupleList>`.
-///     *   Alternatively, `<jps:valueList>` directly under a coverage-like element.
-///     *   Values are expected to be space-separated (commas are also replaced by spaces).
-/// *   **No-Data Value:**
-///     *   `<gml:nilValues>` or `<swe:nilValues>` containing the no-data marker.
-///
-/// ## Important Note:
-/// This parser is **speculative** due to the absence of official schemas or definitive samples
-/// for some target XML formats (e.g., Japanese GSI DEM). Its success heavily depends on the
-/// input XML adhering to the assumed GML-like patterns.
+/// The parser anticipates the following structure:
+/// *   **Root Element**: `<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset">` (must include GML namespace, e.g., `xmlns:gml="http://www.opengis.net/gml/3.2"`).
+/// *   **DEM Container**: `<DEM>` (default namespace).
+///     *   **Mesh Code (Optional)**: `<mesh>` containing the mesh identifier.
+///     *   **CRS Information**: `<spatialReferenceInfo>/<SpatialReference system="urn:ogc:def:crs:EPSG::XXXX"/>`.
+///     *   **Grid Definition**: `<gml:RectifiedGrid>`
+///         *   `<gml:limits>/<gml:GridEnvelope>`:
+///             *   `<gml:low>`: Must be "0 0".
+///             *   `<gml:high>`: Defines grid dimensions as `columns-1 rows-1`.
+///         *   `<gml:origin>/<gml:Point>/<gml:pos>`: Defines the top-left corner coordinates (latitude longitude, e.g., "Y X").
+///         *   Two `<gml:offsetVector>` elements:
+///             1.  First for X-direction cell size (first value taken).
+///             2.  Second for Y-direction cell size (second value taken, absolute value used).
+///     *   **Elevation Data**: `<gml:Coverage>/<gml:rangeSet>/<gml:DataBlock>/<gml:tupleList>` containing space-separated elevation values.
+/// *   **No-Data Value**: The parser includes legacy logic to search for common GML no-data tags like `<gml:nilValues>`,
+///     as the provided JPGIS GML structure did not explicitly define one. This part may need adjustment
+///     if a specific no-data representation for the target format is identified.
 ///
 /// # Arguments
 ///
@@ -95,186 +95,152 @@ fn get_text_from_event(reader: &mut Reader<&[u8]>, _event: &BytesStart) -> Resul
 ///
 /// # Returns
 ///
-/// * `Ok(DemData)` - If parsing is successful, returns a `DemData` struct populated with
-///   the extracted metadata and elevation values.
-/// * `Err(String)` - If parsing fails due to missing critical information, malformed data,
-///   or XML read errors, returns a `String` describing the error. Detailed error
-///   information is also logged via the `log` crate.
+/// * `Ok(DemData)` - If parsing is successful, returns a `DemData` struct.
+/// * `Err(String)` - If parsing fails due to structural deviations, missing critical data,
+///   or value parsing errors. Detailed error information is also logged.
 pub fn parse_dem_xml(xml_content: &str) -> Result<DemData, String> {
-    debug!("Starting XML parsing process for input of length {}.", xml_content.len());
+    debug!("Starting XML parsing process (New Specification) for input of length {}.", xml_content.len());
     let mut reader = Reader::from_str(xml_content);
     reader.trim_text(true);
 
     let mut buf = Vec::new();
 
-    // --- Temporary storage for metadata components ---
-    let mut width: Option<usize> = None;
-    let mut height: Option<usize> = None;
-    let mut x_min: Option<f64> = None;
-    let mut y_min: Option<f64> = None; // Temp for lowerCorner y
-    let mut y_max: Option<f64> = None; // Temp for upperCorner y
-    let mut cell_size_x: Option<f64> = None;
-    let mut cell_size_y: Option<f64> = None;
+    // --- Metadata components ---
+    let mut crs_epsg: Option<u16> = None;
+    let mut grid_low: Option<String> = None;
+    let mut grid_high_parts: Option<(usize, usize)> = None;
+    let mut origin_pos_parts: Option<(f64, f64)> = None; // (y_max, x_min)
+    let mut offset_vectors: Vec<Vec<f64>> = Vec::new();
+    let mut tuple_list_content: Option<String> = None;
+    let mut parsed_mesh_code: Option<String> = None; // Renamed to avoid conflict if DemMetadata::mesh_code is brought into scope
     let mut no_data_value: Option<f32> = None;
-    let mut crs: Option<String> = None;
-    let mut elevation_values_str: Option<String> = None;
 
-    // --- State flags for parsing ---
+
+    // --- State flags for parsing context ---
+    let mut in_dem = false;
+    let mut in_spatial_reference_info = false;
+    let mut in_rectified_grid = false;
+    let mut in_grid_limits = false;
     let mut in_grid_envelope = false;
-    let mut in_lower_corner = false;
-    let mut in_upper_corner = false;
-    let mut in_tuple_list = false; // For GML-style data blocks
-    let mut in_jps_value_list = false; // For JPGIS-style data blocks
-    let mut in_nil_values = false;
-
+    let mut in_origin = false;
+    let mut in_origin_point = false;
+    let mut in_coverage = false;
+    let mut in_range_set = false;
+    let mut in_data_block = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(bs)) => {
-                let tag_name_cow = String::from_utf8_lossy(bs.name().as_ref());
-                let tag_name = tag_name_cow.to_lowercase();
-                debug!("Encountered start tag: <{}>", tag_name);
+                let current_tag_name = bs.name().into_inner();
+                debug!("Start Tag: {:?}", String::from_utf8_lossy(current_tag_name));
 
-                for attr in bs.attributes() {
-                    if let Ok(attr) = attr {
-                        if attr.key.as_ref() == b"srsName" {
-                            crs = Some(String::from_utf8_lossy(&attr.value).into_owned());
-                            debug!("Found srsName attribute: {}", crs.as_ref().unwrap());
-                        }
-                    }
-                }
-
-                match tag_name.as_str() {
-                    "gml:gridenvelope" | "jps:gridenvelope" => {
-                        debug!("Entering <{}> parsing state.", tag_name);
-                        in_grid_envelope = true;
-                    }
-                    "gml:low" | "jps:low" if in_grid_envelope => {
-                        debug!("Parsing <{}> within GridEnvelope (typically '0 0', ignored for direct width/height).", tag_name);
-                    }
-                    "gml:high" | "jps:high" if in_grid_envelope => {
-                        debug!("Attempting to parse width/height from <{}>.", tag_name);
-                        let text = get_text_from_event(&mut reader, &bs)?;
-                        let parts: Vec<&str> = text.split_whitespace().collect();
-                        if parts.len() == 2 {
-                            width = parts[0].parse().ok();
-                            height = parts[1].parse().ok();
-                            debug!("Parsed width: {:?}, height: {:?} from <{}>", width, height, tag_name);
-                            if width.is_none() || height.is_none() {
-                                warn!("Failed to parse width/height from '{}' in <{}>. Content: '{}'", text, tag_name, text);
+                if current_tag_name == b"DEM" { in_dem = true; }
+                else if in_dem && current_tag_name == b"spatialReferenceInfo" { in_spatial_reference_info = true; }
+                else if in_spatial_reference_info && current_tag_name == b"SpatialReference" {
+                    for attr in bs.attributes() {
+                        let attr = attr.map_err(|e| format!("XML Attribute Error: {}", e))?;
+                        if attr.key.into_inner() == b"system" {
+                            let val_str = String::from_utf8(attr.value.into_owned())
+                                .map_err(|e| format!("XML Parse Error: CRS system attribute not UTF-8: {}", e))?;
+                            debug!("Found SpatialReference system attribute: {}", val_str);
+                            if let Some(code_str) = val_str.strip_prefix("urn:ogc:def:crs:EPSG::") {
+                                crs_epsg = code_str.parse::<u16>().ok();
+                                if crs_epsg.is_none() {
+                                    warn!("Failed to parse EPSG code from system attribute: {}", val_str);
+                                } else {
+                                     debug!("Parsed EPSG code: {:?}", crs_epsg);
+                                }
                             }
-                        } else {
-                            warn!("Unexpected format for width/height in <{}>. Content: '{}'", tag_name, text);
                         }
                     }
-                    "gml:envelope" | "jps:envelope" => {
-                        debug!("Encountered <{}>, checking for srsName if not already found.", tag_name);
-                    }
-                    "gml:lowercorner" | "jps:lowercorner" => {
-                        debug!("Entering <{}> parsing state.", tag_name);
-                        in_lower_corner = true;
-                    }
-                    "gml:uppercorner" | "jps:uppercorner" => {
-                        debug!("Entering <{}> parsing state.", tag_name);
-                        in_upper_corner = true;
-                    }
-                    "gml:offsetvector" | "jps:offsetvector" => {
-                        debug!("Attempting to parse cell sizes from <{}>.", tag_name);
-                        let text = get_text_from_event(&mut reader, &bs)?;
-                        let parts: Vec<&str> = text.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            cell_size_x = parts[0].parse().ok();
-                            cell_size_y = parts[1].parse().ok().map(|v: f64| v.abs());
-                            debug!("Parsed cell_size_x: {:?}, cell_size_y: {:?} from <{}>", cell_size_x, cell_size_y, tag_name);
-                             if cell_size_x.is_none() || cell_size_y.is_none() {
-                                warn!("Failed to parse cell_size_x/y from '{}' in <{}>. Content: '{}'", text, tag_name, text);
-                            }
-                        } else {
-                             warn!("Unexpected format for cell_size_x/y in <{}>. Content: '{}'", tag_name, text);
-                        }
-                    }
-                    "gml:nilvalues" | "swe:nilvalues" | "jps:nilvalues" => {
-                        debug!("Entering <{}> parsing state for no-data value.", tag_name);
-                        in_nil_values = true;
-                    }
-                    "gml:tuplelist" | "tuplelist" => {
-                        debug!("Found elevation data tag: <{}>. Entering data parsing state.", tag_name);
-                        in_tuple_list = true;
-                    }
-                    "jps:valuelist" => {
-                        debug!("Found elevation data tag: <{}>. Entering data parsing state.", tag_name);
-                        in_jps_value_list = true;
-                    }
-                    _ => {
-                        // debug!("Ignoring unhandled start tag: <{}>", tag_name);
-                    }
                 }
-            }
-            Ok(Event::End(e_bytes)) => {
-                let tag_name_cow = String::from_utf8_lossy(e_bytes.name().as_ref());
-                let tag_name = tag_name_cow.to_lowercase();
-                debug!("Encountered end tag: </{}>", tag_name);
-                match tag_name.as_str() {
-                    "gml:gridenvelope" | "jps:gridenvelope" => in_grid_envelope = false,
-                    "gml:lowercorner" | "jps:lowercorner" => in_lower_corner = false,
-                    "gml:uppercorner" | "jps:uppercorner" => in_upper_corner = false,
-                    "gml:tuplelist" | "tuplelist" => in_tuple_list = false,
-                    "jps:valuelist" => in_jps_value_list = false,
-                    "gml:nilvalues" | "swe:nilvalues" | "jps:nilvalues" => in_nil_values = false,
-                    _ => (),
+                else if in_dem && current_tag_name == b"gml:RectifiedGrid" { in_rectified_grid = true; }
+                else if in_rectified_grid && current_tag_name == b"gml:limits" { in_grid_limits = true; }
+                else if in_grid_limits && current_tag_name == b"gml:GridEnvelope" { in_grid_envelope = true; }
+                else if in_grid_envelope && current_tag_name == b"gml:low" {
+                    let text = get_text_from_event(&mut reader, current_tag_name)?;
+                    debug!("gml:low content: {}", text);
+                    if text.trim() != "0 0" {
+                        return Err(format!("XML Structure Error: <gml:low> must be '0 0', found '{}'", text));
+                    }
+                    grid_low = Some(text);
                 }
-            }
-            Ok(Event::Text(e_text)) => {
-                let text = e_text.unescape().map(|s| s.into_owned())
-                    .map_err(|err| {
-                        let msg = format!("XML text decoding error: {}", err);
-                        error!("{}", msg);
-                        msg
-                    })?;
-                debug!("Encountered text content (first 50 chars): '{}'", text.chars().take(50).collect::<String>());
-
-                if in_lower_corner {
-                    debug!("Attempting to parse x_min, y_min (temp) from text: '{}'", text);
+                else if in_grid_envelope && current_tag_name == b"gml:high" {
+                    let text = get_text_from_event(&mut reader, current_tag_name)?;
                     let parts: Vec<&str> = text.split_whitespace().collect();
                     if parts.len() == 2 {
-                        x_min = parts[0].parse().ok();
-                        y_min = parts[1].parse().ok();
-                        debug!("Parsed x_min: {:?}, y_min (temp): {:?}", x_min, y_min);
-                        if x_min.is_none() || y_min.is_none() {
-                            warn!("Failed to parse x_min/y_min from <gml:lowerCorner> content: '{}'", text);
+                        if let (Ok(c), Ok(r)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+                            grid_high_parts = Some((c, r));
+                            debug!("Parsed gml:high cols-1: {}, rows-1: {}", c, r);
+                        } else {
+                            warn!("Failed to parse numeric values from <gml:high>: {}", text);
                         }
                     } else {
-                        warn!("Unexpected format for <gml:lowerCorner> content: '{}'", text);
+                        warn!("Unexpected format for <gml:high>: {}. Expected 'cols-1 rows-1'.", text);
                     }
-                    in_lower_corner = false; 
-                } else if in_upper_corner {
-                    debug!("Attempting to parse y_max from text: '{}'", text);
+                }
+                else if in_rectified_grid && current_tag_name == b"gml:origin" { in_origin = true; }
+                else if in_origin && current_tag_name == b"gml:Point" { in_origin_point = true; }
+                else if in_origin_point && current_tag_name == b"gml:pos" {
+                    let text = get_text_from_event(&mut reader, current_tag_name)?;
                     let parts: Vec<&str> = text.split_whitespace().collect();
                     if parts.len() == 2 {
-                        y_max = parts[1].parse().ok();
-                        debug!("Parsed y_max: {:?}", y_max);
-                        if y_max.is_none() {
-                             warn!("Failed to parse y_max from <gml:upperCorner> content: '{}'", text);
+                         if let (Ok(y_val), Ok(x_val)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                            origin_pos_parts = Some((y_val, x_val)); // y_max, x_min
+                            debug!("Parsed gml:pos y_max: {}, x_min: {}", y_val, x_val);
+                        } else {
+                            warn!("Failed to parse numeric values from <gml:pos>: {}", text);
                         }
                     } else {
-                        warn!("Unexpected format for <gml:upperCorner> content: '{}'", text);
+                        warn!("Unexpected format for <gml:pos>: {}. Expected 'lat lon'.", text);
                     }
-                    in_upper_corner = false; 
-                } else if in_tuple_list || in_jps_value_list {
-                    debug!("Capturing elevation data string: '{}'", text.chars().take(100).collect::<String>());
-                    elevation_values_str = Some(text.to_string());
-                    in_tuple_list = false; // Assume data is direct child
-                    in_jps_value_list = false; // Assume data is direct child
-                } else if in_nil_values {
-                    debug!("Attempting to parse no_data_value from text: '{}'", text);
+                }
+                else if in_rectified_grid && current_tag_name == b"gml:offsetVector" {
+                    let text = get_text_from_event(&mut reader, current_tag_name)?;
+                    let parts: Vec<f64> = text.split_whitespace()
+                                               .filter_map(|s| s.parse::<f64>().ok())
+                                               .collect();
+                    if !parts.is_empty() {
+                        debug!("Parsed gml:offsetVector content: {:?}", parts);
+                        offset_vectors.push(parts);
+                    } else {
+                        warn!("Failed to parse numeric values from <gml:offsetVector>: {}", text);
+                    }
+                }
+                else if in_dem && current_tag_name == b"gml:Coverage" { in_coverage = true; }
+                else if in_coverage && current_tag_name == b"gml:rangeSet" { in_range_set = true; }
+                else if in_range_set && current_tag_name == b"gml:DataBlock" { in_data_block = true; }
+                else if in_data_block && current_tag_name == b"gml:tupleList" {
+                    tuple_list_content = Some(get_text_from_event(&mut reader, current_tag_name)?);
+                    debug!("Captured gml:tupleList content (first 100 chars): '{}'", tuple_list_content.as_ref().unwrap_or(&"".to_string()).chars().take(100).collect::<String>());
+                }
+                else if in_dem && current_tag_name == b"mesh" {
+                    parsed_mesh_code = Some(get_text_from_event(&mut reader, current_tag_name)?);
+                    debug!("Captured mesh code: {}", parsed_mesh_code.as_ref().unwrap_or(&"".to_string()));
+                }
+                else if current_tag_name == b"gml:nilValues" || current_tag_name == b"swe:nilValues" {
+                    let text = get_text_from_event(&mut reader, current_tag_name)?;
                     no_data_value = text.trim().parse().ok();
-                    debug!("Parsed no_data_value: {:?}", no_data_value);
-                    if no_data_value.is_none() && !text.trim().is_empty() {
-                        warn!("Failed to parse no_data_value from content: '{}'", text.trim());
-                    }
-                    in_nil_values = false;
+                    debug!("Parsed no_data_value (legacy attempt): {:?}", no_data_value);
                 }
+
             }
+            Ok(Event::End(bs)) => {
+                let current_tag_name = bs.name().into_inner();
+                debug!("End Tag: {:?}", String::from_utf8_lossy(current_tag_name));
+
+                if current_tag_name == b"DEM" { in_dem = false; }
+                else if current_tag_name == b"spatialReferenceInfo" { in_spatial_reference_info = false; }
+                else if current_tag_name == b"gml:RectifiedGrid" { in_rectified_grid = false; }
+                else if current_tag_name == b"gml:limits" { in_grid_limits = false; }
+                else if current_tag_name == b"gml:GridEnvelope" { in_grid_envelope = false; }
+                else if current_tag_name == b"gml:origin" { in_origin = false; }
+                else if current_tag_name == b"gml:Point" { in_origin_point = false; }
+                else if current_tag_name == b"gml:Coverage" { in_coverage = false; }
+                else if current_tag_name == b"gml:rangeSet" { in_range_set = false; }
+                else if current_tag_name == b"gml:DataBlock" { in_data_block = false; }
+            }
+            Ok(Event::Text(_)) => { /* Text events are handled by get_text_from_event */ }
             Ok(Event::Eof) => {
                 debug!("Reached end of XML document.");
                 break;
@@ -290,77 +256,63 @@ pub fn parse_dem_xml(xml_content: &str) -> Result<DemData, String> {
     }
 
     debug!("Finished parsing XML elements. Proceeding to data validation and construction.");
+    // parsed_mesh_code (Option<String>) is already populated from parsing if the <mesh> tag was found.
+    // Logging of mesh_code presence or absence is handled by debug statements during parsing.
 
-    // --- Post-processing and Validation ---
-    if crs.is_none() {
-        warn!("CRS information (srsName) not found in XML. GeoTiff will lack CRS metadata.");
+    // --- Post-processing and Validation (New Specification) ---
+    let final_crs = crs_epsg.map(|code| format!("EPSG:{}", code));
+    if final_crs.is_none() {
+         warn!("CRS information (urn:ogc:def:crs:EPSG::XXXX from <SpatialReference system=...>) not found or failed to parse.");
     }
-    if no_data_value.is_none() {
-        warn!("No-data value (<gml:nilValues> or similar) not found or failed to parse. GeoTiff will not have a no-data value set, unless all values are valid numbers.");
+
+    let (cols_minus_1, rows_minus_1) = grid_high_parts.ok_or_else(|| {
+        let msg = "XML Parse Error: Grid dimensions (<gml:high> within <gml:GridEnvelope>) are missing or invalid.".to_string();
+        error!("{}", msg);
+        msg
+    })?;
+    let final_width = cols_minus_1 + 1;
+    let final_height = rows_minus_1 + 1;
+
+    let (parsed_y_max, parsed_x_min) = origin_pos_parts.ok_or_else(|| {
+        let msg = "XML Parse Error: Origin position (<gml:pos> within <gml:origin>/<gml:Point>) is missing or invalid.".to_string();
+        error!("{}", msg);
+        msg
+    })?;
+
+    if offset_vectors.len() < 2 {
+        return Err("XML Structure Error: Expected at least two <gml:offsetVector> elements for cell size.".to_string());
     }
+    let final_cell_size_x = offset_vectors[0].get(0).copied().ok_or_else(|| {
+        "XML Parse Error: First <gml:offsetVector> is missing the first value for cell_size_x.".to_string()
+    })?;
+    let final_cell_size_y = offset_vectors[1].get(1).copied().ok_or_else(|| {
+        "XML Parse Error: Second <gml:offsetVector> is missing the second value for cell_size_y.".to_string()
+    })?.abs(); 
+
+    if grid_low.is_none() {
+         return Err("XML Structure Error: <gml:low> element is missing.".to_string());
     }
-
-    // --- Post-processing and Validation ---
-
-    // Ensure y_max is indeed the maximum y-value. If only y_min and y_max are available from
-    // lowerCorner and upperCorner, and if cell_size_y is positive, y_max should be the one from upperCorner.
-    // If the DEM uses a geographic CRS where Y increases northwards, upperCorner Y is y_max.
-    // If it's a projected CRS where Y decreases (e.g. some image formats), this might need adjustment,
-    // but for DEMs, y_max is usually the northernmost extent.
-
-    // Derivations for cell_size_x/y are not implemented as they are highly speculative.
-    // Requiring them to be present in the XML.
 
     // --- Construct DemMetadata ---
     debug!("Constructing DemMetadata from parsed values.");
-    let final_width = width.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM width (e.g., from <gml:high> or <jps:high> in GridEnvelope) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-    let final_height = height.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM height (e.g., from <gml:high> or <jps:high> in GridEnvelope) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-    let final_x_min = x_min.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM x_min (e.g., from <gml:lowerCorner>) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-    let final_y_max = y_max.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM y_max (e.g., from <gml:upperCorner>) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-    let final_cell_size_x = cell_size_x.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM cell_size_x (e.g., from <gml:offsetVector>) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-    let final_cell_size_y = cell_size_y.ok_or_else(|| {
-        let msg = "XML Parse Error: DEM cell_size_y (e.g., from <gml:offsetVector>) is missing or invalid.".to_string();
-        error!("{}", msg);
-        msg
-    })?;
-
     let metadata = DemMetadata {
         width: final_width,
         height: final_height,
-        x_min: final_x_min,
-        y_max: final_y_max,
+        x_min: parsed_x_min,
+        y_max: parsed_y_max,
         cell_size_x: final_cell_size_x,
         cell_size_y: final_cell_size_y,
         no_data_value,
-        crs,
+        crs: final_crs,
+        mesh_code: parsed_mesh_code, 
     };
     debug!("DemMetadata constructed: {:?}", metadata);
 
     // --- Parse Elevation Values ---
     debug!("Parsing elevation values string.");
-    let elevation_values_str_content = elevation_values_str
+    let elevation_values_str_content = tuple_list_content
         .ok_or_else(|| {
-            let msg = "XML Parse Error: Elevation data string (e.g., from <gml:tupleList> or <jps:valueList>) is missing.".to_string();
+            let msg = "XML Parse Error: Elevation data string (<gml:tupleList>) is missing.".to_string();
             error!("{}", msg);
             msg
         })?;
@@ -405,332 +357,314 @@ mod tests {
     use super::*;
     use crate::DemMetadata; // Ensure DemMetadata is in scope for assertions
 
-    // Helper to build a common XML structure for tests, allowing specific parts to be overridden.
-    fn build_gml_xml_string(
-        srs_name: &str,
-        grid_high: &str, // "width height"
-        lower_corner: &str, // "x y"
-        upper_corner: &str, // "x y"
-        offset_vector: &str, // "cell_x cell_y"
-        tuple_list_content: &str,
-        nil_values_content: Option<&str>, // e.g., "<gml:nilValues>-9999.0</gml:nilValues>"
-    ) -> String {
-        let nil_values_block = nil_values_content
-            .map(|c| format!("<gml:metadata><gml:NilValues nilReason=\"nodata\">{}</gml:NilValues></gml:metadata>", c))
-            .unwrap_or_else(|| "".to_string()); // No nilValues block if None
-
-        format!(
-            r#"
-            <DEM xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:jps="http://www.gsi.go.jp/GIS/jpgis/2.0/spec">
-              <GridCoverage srsName="{}">
+    const VALID_JPGIS_SAMPLE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset"
+    xmlns:gml="http://www.opengis.net/gml/3.2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xsi:schemaLocation="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset FGD_Dataset.xsd"
+    gml:id="Dataset_1">
+    <DEM>
+        <mesh>533926</mesh>
+        <spatialReferenceInfo>
+            <SpatialReference system="urn:ogc:def:crs:EPSG::6667"/>
+        </spatialReferenceInfo>
+        <gml:RectifiedGrid gml:id="Grid_533926" dimension="2">
+            <gml:limits>
                 <gml:GridEnvelope>
-                  <gml:low>0 0</gml:low>
-                  <gml:high>{}</gml:high> 
+                    <gml:low>0 0</gml:low>
+                    <gml:high>224 149</gml:high> <!-- width=225, height=150 -->
                 </gml:GridEnvelope>
-                <gml:boundedBy>
-                    <gml:Envelope srsName="{}"> 
-                        <gml:lowerCorner>{}</gml:lowerCorner>
-                        <gml:upperCorner>{}</gml:upperCorner>
-                    </gml:Envelope>
-                </gml:boundedBy>
-                <gml:gridDomain>
-                    <gml:GridFunction>
-                        <gml:sequenceRule order="+x-y">Linear</gml:sequenceRule> 
-                    </gml:GridFunction>
-                </gml:gridDomain>
-                <gml:rangeSet>
-                    <gml:DataBlock>
-                        <gml:tupleList>{}</gml:tupleList>
-                    </gml:DataBlock>
-                </gml:rangeSet>
-                {} 
-                <gml:offsetVector srsName="{}">{}</gml:offsetVector> 
-              </GridCoverage>
-            </DEM>
-            "#,
-            srs_name, grid_high, srs_name, lower_corner, upper_corner, tuple_list_content, nil_values_block, srs_name, offset_vector
-        )
-    }
-
-    #[test]
-    fn test_parse_ideal_gml_xml() {
-        // Test case: A reasonably complete and valid GML-like XML.
-        let xml_data = build_gml_xml_string(
-            "EPSG:4326",
-            "2 2", // width=2, height=2
-            "135.0 35.0", // x_min, y_min (temp)
-            "135.01 35.01", // x_max (temp), y_max
-            "0.005 0.005", // cell_size_x, cell_size_y
-            "1.0 2.0 3.0 4.0", // elevation data
-            Some("<gml:nilValues>-9999.0</gml:nilValues>"),
-        );
-
-        let result = parse_dem_xml(&xml_data);
-        assert!(result.is_ok(), "Parsing ideal GML XML failed: {:?}", result.err());
-        let dem_data = result.unwrap();
-
-        assert_eq!(dem_data.metadata.width, 2);
-        assert_eq!(dem_data.metadata.height, 2);
-        assert_eq!(dem_data.metadata.x_min, 135.0);
-        assert_eq!(dem_data.metadata.y_max, 35.01);
-        assert_eq!(dem_data.metadata.cell_size_x, 0.005);
-        assert_eq!(dem_data.metadata.cell_size_y, 0.005);
-        assert_eq!(dem_data.metadata.crs, Some("EPSG:4326".to_string()));
-        assert_eq!(dem_data.metadata.no_data_value, Some(-9999.0));
-        assert_eq!(dem_data.elevation_values, vec![1.0, 2.0, 3.0, 4.0]);
-    }
-
-    #[test]
-    fn test_parse_xml_missing_optional_crs() {
-        // Test case: XML is valid but missing the optional srsName attribute for CRS.
-        // The parser should still succeed but crs field will be None.
-        // We achieve this by passing an empty string for srs_name which our build_gml_xml_string
-        // will place in srsName attributes. The quick-xml parser will then not pick it up as a valid CRS.
-        // A more robust way would be to modify build_gml_xml_string to optionally omit srsName attributes.
-        // For now, using an empty string in srsName effectively tests this, as our parser only captures non-empty srsName.
-         let xml_data = build_gml_xml_string(
-            "", // Empty srsName
-            "1 1", "0.0 0.0", "0.1 0.1", "0.1 0.1", "10.0",
-            Some("<gml:nilValues>-9999.0</gml:nilValues>"),
-        );
-        let result = parse_dem_xml(&xml_data);
-        assert!(result.is_ok(), "Parsing XML missing CRS failed: {:?}", result.err());
-        let dem_data = result.unwrap();
-        assert_eq!(dem_data.metadata.crs, None, "CRS should be None when srsName is missing/empty.");
-    }
-    
-    #[test]
-    fn test_parse_xml_missing_optional_nodata() {
-        // Test case: XML is valid but missing the optional no_data_value.
-        let xml_data = build_gml_xml_string(
-            "EPSG:3857",
-            "1 1", "0.0 0.0", "1.0 1.0", "1.0 1.0", "100.0",
-            None, // No nil_values_content
-        );
-        let result = parse_dem_xml(&xml_data);
-        assert!(result.is_ok(), "Parsing XML missing no-data failed: {:?}", result.err());
-        let dem_data = result.unwrap();
-        assert_eq!(dem_data.metadata.no_data_value, None, "no_data_value should be None.");
-    }
-
-
-    #[test]
-    fn test_parse_malformed_elevation_data_non_numeric() {
-        // Test case: Elevation data contains non-numeric values.
-        let xml_data = build_gml_xml_string(
-            "EPSG:4326", "2 1", "0 0", "1 1", "1 1",
-            "1.0 non_numeric_value", // Malformed data
-            Some("<gml:nilValues>-9999.0</gml:nilValues>"),
-        );
-        let result = parse_dem_xml(&xml_data);
-        assert!(result.is_err(), "Parsing should fail for non-numeric elevation data.");
-        assert!(result.err().unwrap().contains("Failed to parse elevation value 'non_numeric_value'"));
-    }
-    
-    #[test]
-    fn test_parse_malformed_elevation_data_incorrect_count() {
-        // Test case: Elevation data count does not match width * height.
-        let xml_data = build_gml_xml_string(
-            "EPSG:4326", "2 2", "0 0", "1 1", "0.5 0.5",
-            "1.0 2.0 3.0", // Expected 4 values (2x2), got 3
-            Some("<gml:nilValues>-9999.0</gml:nilValues>"),
-        );
-        let result = parse_dem_xml(&xml_data);
-        assert!(result.is_err(), "Parsing should fail for incorrect elevation data count.");
-        assert!(result.err().unwrap().contains("Mismatch between expected number of elevation values"));
-    }
-
-    #[test]
-    fn test_missing_essential_width_height() {
-        // Test case: Missing <gml:high> which defines width and height.
-        let xml_data = r#" 
-        <DEM xmlns:gml="http://www.opengis.net/gml/3.2">
-          <GridCoverage srsName="EPSG:4326">
-            <gml:GridEnvelope>
-              <gml:low>0 0</gml:low>
-              <!-- <gml:high>2 2</gml:high> --> <!-- Missing -->
-            </gml:GridEnvelope>
-            <gml:boundedBy><gml:Envelope srsName="EPSG:4326"><gml:lowerCorner>0 0</gml:lowerCorner><gml:upperCorner>1 1</gml:upperCorner></gml:Envelope></gml:boundedBy>
-            <gml:rangeSet><gml:DataBlock><gml:tupleList>1 2 3 4</gml:tupleList></gml:DataBlock></gml:rangeSet>
-            <gml:offsetVector>0.5 0.5</gml:offsetVector>
-          </GridCoverage>
-        </DEM>"#;
-        let result = parse_dem_xml(xml_data);
-        assert!(result.is_err(), "Parsing should fail if width/height are missing.");
-        assert!(result.err().unwrap().contains("DEM width"));
-    }
-
-    #[test]
-    fn test_missing_essential_lower_corner() {
-        // Test case: Missing <gml:lowerCorner> which defines x_min.
-        let xml_data = r#"
-        <DEM xmlns:gml="http://www.opengis.net/gml/3.2">
-          <GridCoverage srsName="EPSG:4326">
-            <gml:GridEnvelope><gml:low>0 0</gml:low><gml:high>2 2</gml:high></gml:GridEnvelope>
-            <gml:boundedBy>
-                <gml:Envelope srsName="EPSG:4326">
-                    <!-- <gml:lowerCorner>0 0</gml:lowerCorner> --> <!-- Missing -->
-                    <gml:upperCorner>1 1</gml:upperCorner>
-                </gml:Envelope>
-            </gml:boundedBy>
-            <gml:rangeSet><gml:DataBlock><gml:tupleList>1 2 3 4</gml:tupleList></gml:DataBlock></gml:rangeSet>
-            <gml:offsetVector>0.5 0.5</gml:offsetVector>
-          </GridCoverage>
-        </DEM>"#;
-        let result = parse_dem_xml(xml_data);
-        assert!(result.is_err(), "Parsing should fail if x_min (lowerCorner) is missing.");
-        assert!(result.err().unwrap().contains("DEM x_min"));
-    }
-    
-    #[test]
-    fn test_missing_essential_offset_vector() {
-        // Test case: Missing <gml:offsetVector> which defines cell sizes.
-        let xml_data = r#"
-        <DEM xmlns:gml="http://www.opengis.net/gml/3.2">
-          <GridCoverage srsName="EPSG:4326">
-            <gml:GridEnvelope><gml:low>0 0</gml:low><gml:high>2 2</gml:high></gml:GridEnvelope>
-            <gml:boundedBy><gml:Envelope srsName="EPSG:4326"><gml:lowerCorner>0 0</gml:lowerCorner><gml:upperCorner>1 1</gml:upperCorner></gml:Envelope></gml:boundedBy>
-            <gml:rangeSet><gml:DataBlock><gml:tupleList>1 2 3 4</gml:tupleList></gml:DataBlock></gml:rangeSet>
-            <!-- <gml:offsetVector>0.5 0.5</gml:offsetVector> --> <!-- Missing -->
-          </GridCoverage>
-        </DEM>"#;
-        let result = parse_dem_xml(xml_data);
-        assert!(result.is_err(), "Parsing should fail if cell_size_x/y (offsetVector) are missing.");
-        assert!(result.err().unwrap().contains("DEM cell_size_x"));
-    }
-
-    #[test]
-    fn test_missing_elevation_data_tuplelist() {
-        // Test case: Missing <gml:tupleList> (or <jps:valueList>).
-        let xml_data = r#"
-        <DEM xmlns:gml="http://www.opengis.net/gml/3.2">
-          <GridCoverage srsName="EPSG:4326">
-            <gml:GridEnvelope><gml:low>0 0</gml:low><gml:high>2 2</gml:high></gml:GridEnvelope>
-            <gml:boundedBy><gml:Envelope srsName="EPSG:4326"><gml:lowerCorner>0 0</gml:lowerCorner><gml:upperCorner>1 1</gml:upperCorner></gml:Envelope></gml:boundedBy>
-            <gml:rangeSet><gml:DataBlock><!-- <gml:tupleList>1 2 3 4</gml:tupleList> --></gml:DataBlock></gml:rangeSet>
-            <gml:offsetVector>0.5 0.5</gml:offsetVector>
-          </GridCoverage>
-        </DEM>"#;
-        let result = parse_dem_xml(xml_data);
-        assert!(result.is_err(), "Parsing should fail if elevation data string is missing.");
-        assert!(result.err().unwrap().contains("Elevation data string"));
-    }
-
-    // Keeping the existing minimal and JPGIS tests as they test slightly different structures/paths.
-    // The `build_gml_xml_string` helper is primarily for GML-like structures.
-    #[test]
-    fn test_parse_minimal_hypothetical_xml_original() { // Renamed to avoid conflict
-        // This is a VERY simplified and hypothetical XML. Real GSI XML will be much more complex.
-        // It includes only a few elements to check basic parsing flow.
-        let xml_data = r#"
-        <DEM>
-          <GridCoverage srsName="EPSG:4326">
-            <gml:GridEnvelope>
-              <gml:low>0 0</gml:low>
-              <gml:high>2 2</gml:high> 
-            </gml:GridEnvelope>
-            <gml:boundedBy>
-                <gml:Envelope srsName="EPSG:4326">
-                    <gml:lowerCorner>135.0 35.0</gml:lowerCorner>
-                    <gml:upperCorner>135.01 35.01</gml:upperCorner>
-                </gml:Envelope>
-            </gml:boundedBy>
-            <gml:gridDomain>
-                <gml:GridFunction>
-                    <gml:sequenceRule order="+x-y">Linear</gml:sequenceRule> 
-                </gml:GridFunction>
-            </gml:gridDomain>
+            </gml:limits>
+            <gml:axisLabels>Lat Long</gml:axisLabels> <!-- Or i j, not directly used by parser -->
+            <gml:origin>
+                <gml:Point gml:id="P_533926">
+                    <gml:pos>36.1666666666667 139.833333333333</gml:pos> <!-- y_max (lat), x_min (lon) -->
+                </gml:Point>
+            </gml:origin>
+            <gml:offsetVector>0.0 0.000104166666666667</gml:offsetVector> <!-- cell_size_x (lon-spacing) -->
+            <gml:offsetVector>-0.0000833333333333333 0.0</gml:offsetVector> <!-- cell_size_y (lat-spacing, negative) -->
+        </gml:RectifiedGrid>
+        <gml:Coverage>
             <gml:rangeSet>
                 <gml:DataBlock>
                     <gml:tupleList>
-                        1.0 2.0
-                        3.0 4.0
-                    </gml:tupleList>
+                        10.0 10.1 10.2 10.3 10.4
+                        11.0 11.1 11.2 11.3 11.4
+                        12.0 12.1 12.2 12.3 12.4
+                    </gml:tupleList> <!-- Example: 3 rows, 5 columns. Actual sample would have 225*150 values -->
                 </gml:DataBlock>
             </gml:rangeSet>
-            <gml:coverageFunction>
-                <gml:GridFunction>
-                    <gml:sequenceRule>Linear</gml:sequenceRule> 
-                </gml:GridFunction>
-            </gml:coverageFunction>
-            <gml:metadata>
-                <gml:NilValues nilReason="nodata">
-                    <gml:nilValues>-9999.0</gml:nilValues>
-                </gml:NilValues>
-            </gml:metadata>
-            <gml:offsetVector srsName="EPSG:4326">0.005 0.005</gml:offsetVector> 
-          </GridCoverage>
-        </DEM>
-        "#;
+        </gml:Coverage>
+        <!-- No explicit no-data value in this sample structure -->
+    </DEM>
+</Dataset>
+    "#;
 
-        let result = parse_dem_xml(xml_data);
-        assert!(result.is_ok(), "Parsing failed: {:?}", result.err());
+    // Simplified version for most tests to keep them concise, focusing on structure not full data.
+    // Width=3, Height=2 based on gml:high 2 1
+    fn build_test_xml(
+        crs_system_attr: &str,
+        gml_high_content: &str,
+        gml_pos_content: &str,
+        offset_vector1_content: &str,
+        offset_vector2_content: &str,
+        tuple_list_content: &str,
+        mesh_content: Option<&str>,
+        omit_dem_tag: bool,
+        omit_spatial_ref_info: bool,
+        omit_rectified_grid: bool,
+        omit_limits: bool,
+        omit_grid_envelope: bool,
+        omit_gml_low: bool,
+        omit_gml_high: bool,
+        omit_origin: bool,
+        omit_origin_point: bool,
+        omit_pos: bool,
+        omit_offset_vector1: bool,
+        omit_offset_vector2: bool,
+        omit_coverage: bool,
+        omit_range_set: bool,
+        omit_data_block: bool,
+        omit_tuple_list: bool
+    ) -> String {
+        let mesh_tag = mesh_content.map_or("".to_string(), |m| format!("<mesh>{}</mesh>", m));
+        
+        let dem_content = if omit_dem_tag { "".to_string() } else {
+            format!(r#"
+            <DEM>
+                {mesh_tag}
+                {spatial_ref_info}
+                {rectified_grid}
+                {coverage}
+            </DEM>
+            "#,
+            mesh_tag = mesh_tag,
+            spatial_ref_info = if omit_spatial_ref_info { "".to_string() } else {
+                format!(r#"<spatialReferenceInfo><SpatialReference system="{}"/></spatialReferenceInfo>"#, crs_system_attr)
+            },
+            rectified_grid = if omit_rectified_grid { "".to_string() } else {
+                format!(r#"
+                <gml:RectifiedGrid gml:id="TestGrid" dimension="2">
+                    {limits}
+                    {origin}
+                    {offset_vector1}
+                    {offset_vector2}
+                </gml:RectifiedGrid>
+                "#,
+                limits = if omit_limits { "".to_string() } else {
+                    format!(r#"<gml:limits>{grid_envelope}</gml:limits>"#,
+                        grid_envelope = if omit_grid_envelope { "".to_string() } else {
+                            format!(r#"<gml:GridEnvelope>{gml_low}{gml_high}</gml:GridEnvelope>"#,
+                                gml_low = if omit_gml_low { "".to_string() } else { "<gml:low>0 0</gml:low>" },
+                                gml_high = if omit_gml_high { "".to_string() } else { format!("<gml:high>{}</gml:high>", gml_high_content) }
+                            )
+                        }
+                    )
+                },
+                origin = if omit_origin { "".to_string() } else {
+                    format!(r#"<gml:origin>{point}</gml:origin>"#,
+                        point = if omit_origin_point { "".to_string() } else {
+                            format!(r#"<gml:Point gml:id="TestOrigin">{pos}</gml:Point>"#,
+                                pos = if omit_pos { "".to_string() } else { format!("<gml:pos>{}</gml:pos>", gml_pos_content) }
+                            )
+                        }
+                    )
+                },
+                offset_vector1 = if omit_offset_vector1 { "".to_string() } else { format!("<gml:offsetVector>{}</gml:offsetVector>", offset_vector1_content) },
+                offset_vector2 = if omit_offset_vector2 { "".to_string() } else { format!("<gml:offsetVector>{}</gml:offsetVector>", offset_vector2_content) }
+                )
+            },
+            coverage = if omit_coverage { "".to_string() } else {
+                format!(r#"<gml:Coverage>{range_set}</gml:Coverage>"#,
+                    range_set = if omit_range_set { "".to_string() } else {
+                        format!(r#"<gml:rangeSet>{data_block}</gml:rangeSet>"#,
+                            data_block = if omit_data_block { "".to_string() } else {
+                                format!(r#"<gml:DataBlock>{tuple_list}</gml:DataBlock>"#,
+                                    tuple_list = if omit_tuple_list { "".to_string() } else { format!("<gml:tupleList>{}</gml:tupleList>", tuple_list_content) }
+                                )
+                            }
+                        )
+                    }
+                )
+            })
+        };
+
+        format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset" xmlns:gml="http://www.opengis.net/gml/3.2">
+    {}
+</Dataset>"#, dem_content)
+    }
+    
+    // Default builder for a minimal valid structure
+    fn build_minimal_valid_xml(
+        crs: &str, high: &str, pos: &str, ov1: &str, ov2: &str, tuples: &str
+    ) -> String {
+        build_test_xml(crs, high, pos, ov1, ov2, tuples, Some("5339"),
+            false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+        )
+    }
+
+
+    #[test]
+    fn test_parse_valid_jpgis_sample_simplified() {
+        // Using a simplified structure based on the provided sample, with fewer data points.
+        // gml:high "2 1" means width=3, height=2. (cols-1, rows-1)
+        // gml:pos "36.0 -139.0" means y_max=36.0, x_min=-139.0
+        // offsetVector1 "0.0 0.1" means cell_size_x = 0.0
+        // offsetVector2 "-0.1 0.0" means cell_size_y = 0.1 (abs(-0.1))
+        // tupleList: 6 values for 3x2 grid
+        let xml_data = build_minimal_valid_xml(
+            "urn:ogc:def:crs:EPSG::6667",
+            "2 1", // width=3, height=2
+            "36.0 139.0", // y_max=36.0, x_min=139.0
+            "0.001 0.0",  // cell_x = 0.001 (from first value)
+            "0.0 -0.001", // cell_y = abs(-0.001) = 0.001 (from second value)
+            "1.0 2.0 3.0 4.0 5.0 6.0"
+        );
+
+        let result = parse_dem_xml(&xml_data);
+        assert!(result.is_ok(), "Parsing valid simplified JPGIS sample failed: {:?}", result.err());
         let dem_data = result.unwrap();
 
-        assert_eq!(dem_data.metadata.width, 2);
-        assert_eq!(dem_data.metadata.height, 2);
-        assert_eq!(dem_data.metadata.x_min, 135.0);
-        assert_eq!(dem_data.metadata.y_max, 35.01);
-        assert_eq!(dem_data.metadata.cell_size_x, 0.005);
-        assert_eq!(dem_data.metadata.cell_size_y, 0.005);
-        assert_eq!(dem_data.metadata.crs, Some("EPSG:4326".to_string()));
-        assert_eq!(dem_data.metadata.no_data_value, Some(-9999.0));
-        assert_eq!(dem_data.elevation_values, vec![1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(dem_data.metadata.width, 3, "Width mismatch");
+        assert_eq!(dem_data.metadata.height, 2, "Height mismatch");
+        assert_eq!(dem_data.metadata.x_min, 139.0, "x_min mismatch");
+        assert_eq!(dem_data.metadata.y_max, 36.0, "y_max mismatch");
+        assert_eq!(dem_data.metadata.cell_size_x, 0.001, "cell_size_x mismatch");
+        assert_eq!(dem_data.metadata.cell_size_y, 0.001, "cell_size_y mismatch");
+        assert_eq!(dem_data.metadata.crs, Some("EPSG:6667".to_string()), "CRS mismatch");
+        assert_eq!(dem_data.metadata.no_data_value, None, "no_data_value should be None as not in new spec"); // Assuming no_data_value is not part of this new spec or found.
+        
+        assert_eq!(dem_data.elevation_values.len(), 6, "Elevation values count mismatch");
+        assert_eq!(dem_data.elevation_values, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], "Elevation values mismatch");
     }
 
     #[test]
-    fn test_parse_jpgis_style_value_list_original() { // Renamed to avoid conflict
-        // This test uses a modified GML structure to specifically test the <jps:valueList> path
-        // for elevation data, while keeping metadata parsing GML-like due to current parser focus.
-        let modified_xml_for_current_parser = r#"
-        <DEM>
-          <GridCoverage srsName="JGD2000">
-            <gml:GridEnvelope>
-              <gml:low>0 0</gml:low>
-              <gml:high>2 2</gml:high> 
-            </gml:GridEnvelope>
-            <gml:boundedBy>
-                <gml:Envelope srsName="JGD2000">
-                    <gml:lowerCorner>140.0 40.0</gml:lowerCorner>
-                    <gml:upperCorner>140.1 40.1</gml:upperCorner>
-                </gml:Envelope>
-            </gml:boundedBy>
-            <gml:rangeSet>
-                <jps:valueList> <!-- Test this specific element for data extraction -->
-                    10.0 20.5
-                    30.0 40.5
-                </jps:valueList>
-            </gml:rangeSet>
-            <gml:metadata>
-                 <gml:nilValues><gml:nilValues>-999.0</gml:nilValues></gml:nilValues>
-            </gml:metadata>
-            <gml:offsetVector>0.05 0.05</gml:offsetVector> 
-          </GridCoverage>
-        </DEM>
-        "#;
-
-        let result = parse_dem_xml(modified_xml_for_current_parser);
-        assert!(result.is_ok(), "Parsing failed for JPGIS-style valueList: {:?}", result.err());
-        let dem_data = result.unwrap();
-
-        assert_eq!(dem_data.metadata.width, 2);
-        assert_eq!(dem_data.metadata.height, 2);
-        assert_eq!(dem_data.metadata.x_min, 140.0);
-        assert_eq!(dem_data.metadata.y_max, 40.1);
-        assert_eq!(dem_data.metadata.cell_size_x, 0.05);
-        assert_eq!(dem_data.metadata.cell_size_y, 0.05);
-        assert_eq!(dem_data.metadata.crs, Some("JGD2000".to_string()));
-        assert_eq!(dem_data.metadata.no_data_value, Some(-999.0));
-        assert_eq!(dem_data.elevation_values, vec![10.0, 20.5, 30.0, 40.5]);
+    fn test_error_missing_dem_tag() {
+        let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err(), "Should fail if <DEM> is missing");
+        // A specific error message might be tricky if the main loop doesn't even start.
+        // For now, just checking it's an error. A more robust check would be if a specific "DEM not found" type error is added.
+        // This test will likely fail if the parser assumes <DEM> must exist from the get-go.
+        // Current logic implies it will fail at `grid_high_parts.ok_or_else` because `in_dem` will never be true.
+        assert!(result.err().unwrap().contains("Grid dimensions"));
+    }
+    
+    #[test]
+    fn test_error_missing_spatial_reference_info() {
+        let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_ok(), "Missing spatialReferenceInfo should be a warning, not an error, CRS will be None. Res: {:?}", result.err());
+        assert_eq!(result.unwrap().metadata.crs, None);
     }
 
     #[test]
-    fn test_missing_critical_data_original() { // Renamed
-        // Test with an almost empty XML, ensuring it fails due to multiple missing critical fields.
-        let xml_data = r#"<DEM></DEM>"#; 
-        let result = parse_dem_xml(xml_data);
+    fn test_error_missing_rectified_grid() {
+        let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false);
+        let result = parse_dem_xml(&xml);
         assert!(result.is_err());
-        // Example: Check if the error message indicates missing width, which is one of the first critical fields checked.
-        assert!(result.err().unwrap().contains("DEM width"));
+        assert!(result.err().unwrap().contains("Grid dimensions")); // Fails because gml:high is not found
+    }
+    
+    #[test]
+    fn test_error_invalid_gml_low() {
+        let xml_data = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset" xmlns:gml="http://www.opengis.net/gml/3.2">
+<DEM>
+    <spatialReferenceInfo><SpatialReference system="urn:ogc:def:crs:EPSG::6667"/></spatialReferenceInfo>
+    <gml:RectifiedGrid gml:id="TestGrid" dimension="2">
+        <gml:limits><gml:GridEnvelope>
+            <gml:low>1 1</gml:low> <!-- Invalid -->
+            <gml:high>2 1</gml:high>
+        </gml:GridEnvelope></gml:limits>
+        <gml:origin><gml:Point gml:id="P"><gml:pos>36.0 139.0</gml:pos></gml:Point></gml:origin>
+        <gml:offsetVector>0.001 0.0</gml:offsetVector>
+        <gml:offsetVector>0.0 -0.001</gml:offsetVector>
+    </gml:RectifiedGrid>
+    <gml:Coverage><gml:rangeSet><gml:DataBlock><gml:tupleList>1 2 3 4 5 6</gml:tupleList></gml:DataBlock></gml:rangeSet></gml:Coverage>
+</DEM>
+</Dataset>"#;
+        let result = parse_dem_xml(xml_data);
+        assert!(result.is_err(), "Should fail for invalid gml:low");
+        assert!(result.err().unwrap().contains("<gml:low> must be '0 0'"));
+    }
+
+    #[test]
+    fn test_error_missing_offset_vectors() {
+         let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false); // omit both offset vectors
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Expected at least two <gml:offsetVector>"));
+    }
+
+    #[test]
+    fn test_error_missing_one_offset_vector() {
+         let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false); // omit second offset vector
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Expected at least two <gml:offsetVector>"));
+    }
+    
+    #[test]
+    fn test_error_malformed_gml_high() {
+        let xml = build_minimal_valid_xml("urn:ogc:def:crs:EPSG::6667", "2 non_numeric", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6");
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        // This might manifest as a general "Grid dimensions missing" if parsing `Ok(c), Ok(r)` fails and `grid_high_parts` remains None.
+        // A more specific error message could be "Failed to parse numeric values from <gml:high>" if we check the `warn!` condition.
+        assert!(result.err().unwrap().contains("Grid dimensions")); 
+    }
+
+    #[test]
+    fn test_error_malformed_offset_vector_value() {
+        let xml = build_minimal_valid_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "non_numeric 0.0", "0.0 -0.1", "1 2 3 4 5 6");
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("First <gml:offsetVector> is missing the first value"));
+    }
+
+    #[test]
+    fn test_error_malformed_tuple_list_non_numeric() {
+        let xml = build_minimal_valid_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 non_numeric 4 5 6");
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Failed to parse elevation value 'non_numeric'"));
+    }
+
+    #[test]
+    fn test_error_elevation_count_mismatch() {
+        // gml:high "2 1" means width=3, height=2, so 6 values expected. Only 5 provided.
+        let xml = build_minimal_valid_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5");
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Mismatch between expected number of elevation values"));
+    }
+    
+    #[test]
+    fn test_error_missing_tuple_list() {
+         let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "", None, // empty tuple list
+            false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true); // omit tuple_list
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Elevation data string (<gml:tupleList>) is missing"));
+    }
+
+    // Example of a test for a missing critical element (e.g. gml:high)
+    #[test]
+    fn test_error_missing_gml_high() {
+         let xml = build_test_xml("urn:ogc:def:crs:EPSG::6667", "2 1", "36.0 139.0", "0.1 0.0", "0.0 -0.1", "1 2 3 4 5 6", None,
+            false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false); // omit gml:high
+        let result = parse_dem_xml(&xml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Grid dimensions"));
     }
 }
+
+[end of dem_converter/src/xml_parser.rs]

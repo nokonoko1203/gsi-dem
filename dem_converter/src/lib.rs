@@ -1,25 +1,30 @@
 //! # DEM Converter Library
 //!
 //! `dem_converter` is a Rust library designed to facilitate the conversion of
-//! Digital Elevation Model (DEM) data from XML-based formats (primarily speculative
-//! GML-like structures) into the GeoTiff raster format.
+//! Digital Elevation Model (DEM) data from XML files, specifically those conforming
+//! to a JPGIS (Japan Profile for Geographic Information Standards) GML structure,
+//! into the GeoTiff raster format.
 //!
 //! This library provides the core functionalities for:
-//! - Parsing DEM XML data to extract metadata and elevation values.
-//! - Writing the extracted DEM data into a GeoTiff file.
+//! - Parsing DEM XML data (adhering to the specified JPGIS GML format) to extract
+//!   metadata and elevation values.
+//! - Writing the extracted DEM data into a GeoTiff file, including relevant
+//!   geospatial metadata.
 //!
-//! The primary components are the `xml_parser` module for handling XML input and
-//! the `geotiff_writer` module for producing GeoTiff output. The main data
-//! structures are `DemMetadata` and `DemData`.
+//! The primary components are the [`xml_parser`] module for handling XML input and
+//! the [`geotiff_writer`] module for producing GeoTiff output. The main data
+//! structures are [`DemMetadata`] and [`DemData`].
 //!
-//! ## Speculative XML Parsing
-//! Due to the unavailability of official schemas or sample files for certain DEM XML formats
-//! (like the Japanese Fundamental Geospatial Data DEM XML), the XML parsing capabilities
-//! are based on common GML patterns and might require adjustments for specific XML structures.
+//! ## XML Format Adherence
+//! The XML parser (`xml_parser::parse_dem_xml`) is specifically tailored to the
+//! JPGIS GML structure detailed in its documentation. While it aims for accuracy
+//! based on this specification, deviations from the expected structure may lead to
+//! parsing errors or incomplete data extraction.
 //!
 //! ## Intended Use
 //! This library can be used as a dependency in other Rust projects that need to
-//! perform DEM data conversions, or as the backend for command-line tools.
+//! perform DEM data conversions from the specified XML format, or as the backend
+//! for command-line tools like the one provided in this project.
 
 pub mod xml_parser;
 pub mod geotiff_writer;
@@ -27,7 +32,7 @@ pub mod geotiff_writer;
 /// Represents the metadata associated with a Digital Elevation Model (DEM).
 ///
 /// This struct holds essential information required to georeference and interpret
-/// the grid of elevation values.
+/// the grid of elevation values, extracted from the JPGIS GML XML format.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DemMetadata {
     /// Number of columns in the grid.
@@ -35,28 +40,32 @@ pub struct DemMetadata {
     /// Number of rows in the grid.
     pub height: usize,
 /// Longitude or projected X coordinate of the **outer edge** of the westernmost column of cells
-/// (often the lower-left or upper-left corner of the grid, depending on `y_max` definition).
-/// For example, for a grid cell whose center is at `x_min_center`, this `x_min` would be `x_min_center - cell_size_x / 2.0`.
+/// Longitude or projected X coordinate of the **outer edge** of the westernmost column of cells.
+/// In the context of the parsed JPGIS GML, this corresponds to the second value in `<gml:pos>`
+/// (interpreted as X, typically longitude) which defines the top-left corner of the grid.
     pub x_min: f64,
-/// Latitude or projected Y coordinate of the **outer edge** of the northernmost row of cells
-/// (often the upper-left or upper-right corner of the grid, depending on `x_min` definition).
-/// For example, for a grid cell whose center is at `y_max_center`, this `y_max` would be `y_max_center + cell_size_y / 2.0`.
+/// Latitude or projected Y coordinate of the **outer edge** of the northernmost row of cells.
+/// In the context of the parsed JPGIS GML, this corresponds to the first value in `<gml:pos>`
+/// (interpreted as Y, typically latitude) which defines the top-left corner of the grid.
     pub y_max: f64,
 /// Pixel or cell dimension in the X-axis direction (e.g., in decimal degrees or meters).
-/// This value is always positive.
+/// This value is always positive. Derived from the first value of the first `<gml:offsetVector>`.
     pub cell_size_x: f64,
 /// Pixel or cell dimension in the Y-axis direction (e.g., in decimal degrees or meters).
-/// This value is always positive. Note that in some raster contexts (like GeoTiff geotransform),
-/// a negative value might be used if the origin is top-left, but `DemMetadata` stores it as positive.
+/// This value is always positive. Derived from the absolute of the second value of the second `<gml:offsetVector>`.
     pub cell_size_y: f64,
 /// The specific floating-point value used to represent missing or void data points
 /// within the `elevation_values` grid. If `None`, it's assumed all points are valid.
+/// Note: The provided JPGIS GML specification did not explicitly define a no-data value tag;
+/// this field might be populated by legacy logic if common GML no-data tags are found.
     pub no_data_value: Option<f32>,
-/// A string representation of the Coordinate Reference System (CRS).
-    /// This can be an EPSG code (e.g., "EPSG:4326" for WGS84),
-/// a Well-Known Text (WKT) string, or other standard CRS identifiers.
-/// If `None`, the CRS is unknown.
+/// A string representation of the Coordinate Reference System (CRS), typically an EPSG code.
+/// Extracted from the `system` attribute of `<SpatialReference>` (e.g., "EPSG:6667").
+/// If `None`, the CRS is unknown or was not successfully parsed.
     pub crs: Option<String>,
+    /// Optional mesh code identifying the region or tile of the DEM.
+    /// Extracted from the text content of the `<mesh>` tag within the `<DEM>` element.
+    pub mesh_code: Option<String>,
 }
 
 /// Represents a complete Digital Elevation Model (DEM), including its
@@ -87,9 +96,11 @@ mod tests {
             cell_size_y: 0.001,
             no_data_value: Some(-9999.0),
             crs: Some("EPSG:4326".to_string()),
+            mesh_code: Some("5339".to_string()),
         };
         assert_eq!(metadata.width, 100);
         assert_eq!(metadata.crs, Some("EPSG:4326".to_string()));
+        assert_eq!(metadata.mesh_code, Some("5339".to_string()));
     }
 
     #[test]
@@ -103,6 +114,7 @@ mod tests {
             cell_size_y: 0.5,
             no_data_value: None,
             crs: None,
+            mesh_code: None,
         };
         let elevation_values = vec![1.0, 2.0, 3.0, 4.0];
         let dem_data = DemData {

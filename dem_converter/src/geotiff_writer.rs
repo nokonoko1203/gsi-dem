@@ -48,6 +48,12 @@ pub fn write_dem_to_geotiff(dem_data: &DemData, output_path: &str) -> Result<(),
     debug!("Starting GeoTiff writing process for output path: {}", output_path);
     let metadata = &dem_data.metadata;
 
+    if let Some(mc) = &metadata.mesh_code {
+        info!("DEM Metadata includes mesh_code: '{}'. This will not be written to the GeoTiff in the current version.", mc);
+    } else {
+        debug!("No mesh_code present in DEM Metadata.");
+    }
+
     debug!("Attempting to create GeoTiff file: {}", output_path);
     let mut file = File::create(output_path)
         .map_err(|e| {
@@ -194,6 +200,10 @@ mod tests {
     use crate::{DemData, DemMetadata};
     use std::env;
     use std::fs;
+    // It's good practice to ensure logging is available for tests if they use functions that log.
+    // However, initializing env_logger in library tests can sometimes conflict if not handled carefully.
+    // For this exercise, we'll assume it's handled or not strictly needed for these specific tests to pass.
+    // fn init_logger() { let _ = env_logger::builder().is_test(true).try_init(); }
     use std::path::PathBuf;
 
     fn create_sample_dem_data() -> DemData {
@@ -207,6 +217,7 @@ mod tests {
                 cell_size_y: 0.005,
                 no_data_value: Some(-9999.0),
                 crs: Some("EPSG:4326".to_string()),
+                mesh_code: Some("5339".to_string()), // Added mesh_code
             },
             elevation_values: vec![1.0, 2.0, 3.0, 4.0],
         }
@@ -214,9 +225,10 @@ mod tests {
 
     #[test]
     fn test_write_dem_to_geotiff_basic() {
+        // init_logger(); // If you want to see logs during test runs
         let dem_data = create_sample_dem_data();
         let mut temp_path = env::temp_dir();
-        temp_path.push("test_output.tif");
+        temp_path.push("test_output_basic.tif"); // Unique name
         let output_path_str = temp_path.to_str().unwrap();
 
         let result = write_dem_to_geotiff(&dem_data, output_path_str);
@@ -231,12 +243,14 @@ mod tests {
 
     #[test]
     fn test_write_dem_to_geotiff_no_crs_no_nodata() {
+        // init_logger();
         let mut dem_data = create_sample_dem_data();
         dem_data.metadata.crs = None;
         dem_data.metadata.no_data_value = None;
+        dem_data.metadata.mesh_code = None; // Explicitly set mesh_code to None for this test
 
         let mut temp_path = env::temp_dir();
-        temp_path.push("test_output_no_crs_nodata.tif");
+        temp_path.push("test_output_no_crs_nodata.tif"); // Unique name
         let output_path_str = temp_path.to_str().unwrap();
 
         let result = write_dem_to_geotiff(&dem_data, output_path_str);
@@ -249,11 +263,13 @@ mod tests {
 
     #[test]
     fn test_write_dem_to_geotiff_projected_crs() {
+        // init_logger();
         let mut dem_data = create_sample_dem_data();
         dem_data.metadata.crs = Some("EPSG:32632".to_string()); // UTM Zone 32N
+        // mesh_code will use the default from create_sample_dem_data()
 
         let mut temp_path = env::temp_dir();
-        temp_path.push("test_output_projected.tif");
+        temp_path.push("test_output_projected.tif"); // Unique name
         let output_path_str = temp_path.to_str().unwrap();
 
         let result = write_dem_to_geotiff(&dem_data, output_path_str);

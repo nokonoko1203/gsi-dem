@@ -2,7 +2,7 @@
 
 ## Description
 
-`dem_converter` is a command-line tool and Rust library designed to convert Digital Elevation Model (DEM) data from XML files (speculatively GML-based) into the GeoTiff raster format. This tool was developed as part of a coding exercise and currently makes assumptions about the input XML structure due to the unavailability of official schemas or sample files for Japanese Fundamental Geospatial Data (DEM) XML.
+`dem_converter` is a command-line tool and Rust library designed to convert Digital Elevation Model (DEM) data from XML files, conforming to a specific JPGIS (Japan Profile for Geographic Information Standards) GML structure, into the GeoTiff raster format. This tool was developed as part of a coding exercise and now adheres to a user-provided specification for the input XML.
 
 ## Build Instructions
 
@@ -76,6 +76,7 @@ The core conversion logic can also be used as a library in other Rust projects.
 // fn main() -> Result<(), String> {
 //     // Ensure DemData and DemMetadata are accessible if you are constructing them manually
 //     // or directly interacting with the fields.
+//     // Note: DemMetadata now includes an optional `mesh_code` field.
 //
 //     let xml_file_path = "path/to/your/input.xml";
 //     let output_tiff_path = "path/to/your/output.tif";
@@ -111,29 +112,46 @@ The core conversion logic can also be used as a library in other Rust projects.
 // }
 ```
 
-## Important Note on XML Format
+## XML Format Adherence
 
-The XML parser in this tool is currently **speculative**. Due to difficulties in accessing official Japanese Fundamental Geospatial Data (DEM) XML schemas or representative sample files, the parser has been designed based on common GML (Geography Markup Language) patterns often found in DEM data and general JPGIS documentation.
+The XML parser in this tool is designed to process Digital Elevation Model (DEM) files that conform to a specific JPGIS (Japan Profile for Geographic Information Standards) GML (Geography Markup Language) structure. This structure is based on a provided specification and sample XML.
 
-It primarily looks for the following GML tags (case-insensitive for local names, prefixes like `gml:` or `jps:` are common):
+The parser expects the following key XML elements and structure:
 
-*   Grid Metadata and Structure:
-    *   `<gml:GridCoverage>` or `<jps: jakościDemPoKryciuSiateczkowym>` (as root or main DEM element)
-    *   `<gml:boundedBy>` containing `<gml:Envelope>`
-    *   `<gml:Envelope>` with an `srsName` attribute for Coordinate Reference System (CRS).
-    *   `<gml:lowerCorner>` and `<gml:upperCorner>` for the bounding box.
-    *   `<gml:GridEnvelope>` or `<jps:GridEnvelope>` defining grid dimensions:
-        *   `<gml:low>` (often "0 0")
-        *   `<gml:high>` (e.g., "width-1 height-1" or "width height")
-    *   `<gml:offsetVector>` or `<jps:offsetVector>` for cell size/pixel resolution (e.g., "cell_size_x cell_size_y").
-    *   `srsName` attributes on various elements can define the CRS.
-*   Elevation Data:
-    *   `<gml:rangeSet>` containing `<gml:DataBlock>` (or similar structures like `<jps:coverage>`).
-    *   `<gml:tupleList>` or `<jps:valueList>` for the actual elevation values, typically space-separated.
-*   No-Data Value:
-    *   `<gml:nilValues>` (often within `<gml:metadata>` or `swe:NilValues`) specifying the value used for missing data points.
+*   **Root Element**: `<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_Dataset">`
+    *   Must include the GML namespace (e.g., `xmlns:gml="http://www.opengis.net/gml/3.2"`).
+*   **DEM Data Container**: `<DEM>` (within the default namespace)
+    *   **Mesh Code (Optional)**: `<mesh>` - Contains the mesh code text (e.g., "533946").
+    *   **Coordinate Reference System (CRS)**:
+        *   Path: `<spatialReferenceInfo>/<SpatialReference>`
+        *   Attribute: `system` on `<SpatialReference>` (e.g., `urn:ogc:def:crs:EPSG::6667`). The EPSG code is extracted from this URN.
+    *   **Grid Definition**: `<gml:RectifiedGrid>`
+        *   **Dimensions**: Defined by `<gml:limits>/<gml:GridEnvelope>`:
+            *   `<gml:low>`: Must contain "0 0".
+            *   `<gml:high>`: Contains two space-separated integers representing `columns-1` and `rows-1`. The parser calculates `width = (cols-1) + 1` and `height = (rows-1) + 1`.
+        *   **Origin (Top-Left Corner)**: Defined by `<gml:origin>/<gml:Point>/<gml:pos>`:
+            *   Contains two space-separated floating-point numbers. The parser interprets these as "latitude longitude" (Y X), corresponding to the `y_max` (northernmost edge) and `x_min` (westernmost edge) of the grid.
+        *   **Cell Size/Resolution**: Defined by two `<gml:offsetVector>` elements:
+            1.  The first `<gml:offsetVector>`: Its first numeric value is taken as `cell_size_x`.
+            2.  The second `<gml:offsetVector>`: Its second numeric value is taken as `cell_size_y` (the absolute value is used, as cell size is stored positively).
+    *   **Elevation Data**:
+        *   Path: `<gml:Coverage>/<gml:rangeSet>/<gml:DataBlock>/<gml:tupleList>`
+        *   The text content of `<gml:tupleList>` contains space-separated floating-point elevation values. These are read row by row.
+    *   **No-Data Value**: The specific location for a no-data value tag was not detailed in the provided JPGIS GML structure. The parser retains some legacy logic to find `<gml:nilValues>` or `<swe:nilValues>`, but its effectiveness for the target format is uncertain. If no such tag is found, it's assumed all data points are valid or the no-data value is implicitly understood by the data consumer.
 
-The parser might not correctly interpret all variations or specific profiles of GSI DEM XML. If you have access to official GSI DEM XML samples or schema documents, the parser logic in `src/xml_parser.rs` would need to be updated accordingly.
+If your XML files deviate significantly from this structure, the parser may not function correctly.
+
+## Extracted Metadata (Features)
+
+The tool extracts the following key metadata from the XML and uses it to structure the GeoTiff:
+
+*   **Grid Dimensions**: Width and Height of the DEM grid.
+*   **Geographic Extent**: Origin coordinates (x_min, y_max) representing the top-left corner of the grid.
+*   **Cell Resolution**: Cell size in X and Y directions.
+*   **Coordinate Reference System (CRS)**: Parsed as an EPSG code string (e.g., "EPSG:6667").
+*   **Mesh Code**: An optional identifier for the DEM tile or region, extracted from the `<mesh>` tag.
+*   **Elevation Values**: The grid of elevation data.
+*   **No-Data Value**: An optional value indicating missing data points (parsing for this is currently based on common GML tags like `<gml:nilValues>`, as it's not explicitly defined in the provided JPGIS structure).
 
 ## Error Handling
 
