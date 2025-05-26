@@ -7,7 +7,11 @@ edition = "2021"
 
 [dependencies]
 quick-xml = "0.31.0"
-geotiff = "0.7.0"
+# The latest published version of `geotiff` on crates.io is 0.0.2.
+# Version 0.7.0 referenced previously does not exist in the index,
+# causing dependency resolution to fail.  Use the available release
+# instead so that the crate can be built without errors.
+geotiff = "0.0.2"
 clap = { version = "4.4.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10"
