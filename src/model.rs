@@ -40,13 +40,14 @@ impl DemTile {
 
     /// GeoTransform配列を取得（GDAL形式）
     pub fn geo_transform(&self) -> [f64; 6] {
+        // origin_latは既に左上座標として設定されている
         [
             self.origin_lon,
             self.x_res,
             0.0,
-            self.origin_lat + (self.rows as f64 - 1.0) * self.y_res, // 左上座標
+            self.origin_lat,
             0.0,
-            -self.y_res, // 負の値（北から南へ）
+            -self.y_res.abs(), // 負の値（北から南へ）
         ]
     }
     

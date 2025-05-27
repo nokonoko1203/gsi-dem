@@ -13,6 +13,7 @@
 *.xml
 *.tif
 *.tiff
+*.zip
 
 # OS
 .DS_Store

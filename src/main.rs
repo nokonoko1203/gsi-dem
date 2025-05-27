@@ -9,7 +9,7 @@ use tracing_subscriber;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// 入力XMLファイルまたはディレクトリ
+    /// 入力XMLファイル、ZIPファイル、またはディレクトリ
     #[arg(value_name = "INPUT")]
     input: PathBuf,
 
@@ -20,6 +20,10 @@ struct Args {
     /// 並列処理スレッド数（デフォルト: CPUコア数）
     #[arg(short, long)]
     threads: Option<usize>,
+
+    /// 複数のDEMタイルを結合して出力
+    #[arg(long)]
+    merge: bool,
 }
 
 fn main() -> Result<()> {
@@ -42,9 +46,26 @@ fn main() -> Result<()> {
 
     // 入力パスの処理
     if args.input.is_file() {
-        // 単一ファイルの処理
-        info!("Processing single file: {:?}", args.input);
-        process_file(&args.input, &args)?;
+        let ext = args.input.extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        
+        match ext {
+            "zip" => {
+                // ZIPファイルの処理
+                info!("Processing ZIP file: {:?}", args.input);
+                process_zip_file(&args.input, &args)?;
+            }
+            "xml" => {
+                // XMLファイルの処理
+                info!("Processing XML file: {:?}", args.input);
+                process_file(&args.input, &args)?;
+            }
+            _ => {
+                error!("Unsupported file type: {:?}", args.input);
+                anyhow::bail!("Input file must be .xml or .zip");
+            }
+        }
     } else if args.input.is_dir() {
         // ディレクトリの処理
         info!("Processing directory: {:?}", args.input);
@@ -91,21 +112,26 @@ fn process_file(path: &Path, args: &Args) -> Result<()> {
 fn process_directory(dir: &Path, args: &Args) -> Result<()> {
     use rayon::prelude::*;
 
-    // XMLファイルを再帰的に収集
-    let xml_files = collect_xml_files(dir)?;
-    info!("Found {} XML files", xml_files.len());
+    // XML/ZIPファイルを再帰的に収集
+    let input_files = collect_input_files(dir)?;
+    info!("Found {} input files (XML/ZIP)", input_files.len());
 
     // 並列処理でファイルを変換
-    let results: Vec<Result<()>> = xml_files
+    let results: Vec<Result<()>> = input_files
         .par_iter()
-        .map(|file| process_file(file, args))
+        .map(|(path, file_type)| {
+            match file_type {
+                FileType::Xml => process_file(path, args),
+                FileType::Zip => process_zip_file(path, args),
+            }
+        })
         .collect();
 
     // エラーをチェック
     let mut errors = Vec::new();
     for (i, result) in results.into_iter().enumerate() {
         if let Err(e) = result {
-            errors.push(format!("{}: {}", xml_files[i].display(), e));
+            errors.push(format!("{}: {}", input_files[i].0.display(), e));
         }
     }
 
@@ -120,8 +146,8 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn collect_xml_files(dir: &Path) -> Result<Vec<std::path::PathBuf>> {
-    let mut xml_files = Vec::new();
+fn collect_input_files(dir: &Path) -> Result<Vec<(std::path::PathBuf, FileType)>> {
+    let mut files = Vec::new();
 
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
@@ -129,12 +155,64 @@ fn collect_xml_files(dir: &Path) -> Result<Vec<std::path::PathBuf>> {
 
         if path.is_dir() {
             // 再帰的に探索
-            let mut sub_files = collect_xml_files(&path)?;
-            xml_files.append(&mut sub_files);
-        } else if path.extension().and_then(|s| s.to_str()) == Some("xml") {
-            xml_files.push(path);
+            let mut sub_files = collect_input_files(&path)?;
+            files.append(&mut sub_files);
+        } else {
+            match path.extension().and_then(|s| s.to_str()) {
+                Some("xml") => files.push((path, FileType::Xml)),
+                Some("zip") => files.push((path, FileType::Zip)),
+                _ => {}
+            }
         }
     }
 
-    Ok(xml_files)
+    Ok(files)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FileType {
+    Xml,
+    Zip,
+}
+
+fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
+    use gsi_dem::{ZipHandler, MergedDemTile};
+    use gsi_dem::writer::GeoTiffWriter;
+    
+    let handler = ZipHandler::new(path);
+    let tiles = handler.process_all_tiles()?;
+    
+    if args.merge && tiles.len() > 1 {
+        // タイルを結合して出力
+        info!("Merging {} tiles", tiles.len());
+        let merged = MergedDemTile::from_tiles(tiles)?;
+        let dem_tile = merged.to_dem_tile();
+        
+        // 出力ファイル名を生成（ZIPファイル名から.zipを除いたもの）
+        let stem = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("merged");
+        let output_filename = format!("{}.tif", stem);
+        let output_path = args.output.join(&output_filename);
+        
+        // GeoTIFFに変換
+        let writer = GeoTiffWriter::new();
+        writer.write(&dem_tile, &output_path)?;
+        
+        info!("Written merged GeoTIFF: {:?}", output_path);
+    } else {
+        // 各タイルを個別に出力
+        info!("Writing {} tiles individually", tiles.len());
+        let writer = GeoTiffWriter::new();
+        
+        for tile in tiles {
+            let output_filename = format!("{}.tif", tile.metadata.meshcode);
+            let output_path = args.output.join(&output_filename);
+            
+            writer.write(&tile, &output_path)?;
+            info!("Written GeoTIFF: {:?}", output_path);
+        }
+    }
+    
+    Ok(())
 }

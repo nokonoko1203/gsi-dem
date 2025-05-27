@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::io::{BufRead, Cursor};
 use anyhow::{Context, Result};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
@@ -189,6 +189,11 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
         start_point: (start_x, start_y),
         metadata,
     })
+}
+
+pub fn parse_dem_xml_from_bytes(bytes: &[u8]) -> Result<DemTile> {
+    let cursor = Cursor::new(bytes);
+    parse_dem_xml(cursor)
 }
 
 #[cfg(test)]
