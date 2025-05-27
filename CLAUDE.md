@@ -141,11 +141,3 @@ examples/
 * [ ] K‑01: `cargo build --release` でバイナリ確認
 * [ ] K‑02: GitHub Release Drafter テンプレートを設定
 * [ ] K‑03: `cargo publish` (optional) に向けて `categories`・`keywords`・`license` を追記
-
----
-
-> **進め方メモ**
->
-> * タスクは A → K の順に実施。チェックを入れたらコミットメッセージにタスク ID を含める（例: `feat(parser): implement E‑04 meshcode parse (#E-04)`).
-> * 質問や未決事項が出たら本メモに追記しつつ、ChatGPT に相談。
-
