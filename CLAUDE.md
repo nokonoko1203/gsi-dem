@@ -141,3 +141,40 @@ examples/
 * [ ] K‑01: `cargo build --release` でバイナリ確認
 * [ ] K‑02: GitHub Release Drafter テンプレートを設定
 * [ ] K‑03: `cargo publish` (optional) に向けて `categories`・`keywords`・`license` を追記
+
+### L. Python バインディング (PyO3)
+
+* [x] L-01: PyO3 依存関係を Cargo.toml に追加（フィーチャーフラグ付き）
+* [x] L-02: Python バインディング用のモジュール構造を作成 (`src/python.rs`)
+* [x] L-03: DemTile と Metadata に PyO3 マクロを追加（PyDemTile, PyMetadata）
+* [x] L-04: XML パーサーの Python ラッパー関数を実装 (`parse_dem_xml`)
+* [x] L-05: Python モジュールのエントリポイントを作成 (`#[pymodule]`)
+* [x] L-06: maturin のセットアップとビルド設定 (`pyproject.toml`)
+* [x] L-07: Python テストコードを作成 (`python/tests/test_parser.py`)
+* [x] L-08: QGIS プラグイン向けのサンプルコードを作成 (`examples/qgis_plugin_example.py`)
+
+## 4. Python バインディング詳細
+
+### ビルド方法
+
+```bash
+# maturin のインストール
+pip install maturin
+
+# 開発モードでビルド
+maturin develop --features python
+
+# リリースビルド
+maturin build --release --features python
+```
+
+### 公開 API
+
+- `parse_dem_xml(path: str) -> DemTile`: XML ファイルを解析して DemTile オブジェクトを返す
+- `DemTile`: DEM データを表すクラス（rows, cols, origin_lon, origin_lat, x_res, y_res, values, start_point, metadata）
+- `Metadata`: メタデータクラス（mesh_code, dem_type, crs_identifier）
+
+### QGIS での使用
+
+QGISプラグインで使用する場合は、ビルドした Python モジュールを QGIS の Python 環境にインストールして使用可能。
+詳細は `examples/qgis_plugin_example.py` を参照。

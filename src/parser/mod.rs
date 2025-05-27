@@ -132,14 +132,23 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
         return Err(anyhow::anyhow!("Invalid corner coordinate format"));
     }
     
+    // JGD2011 (fguuid:jgd2011.bl) uses lat,lon order
     let origin_lat = lower_parts[0].parse::<f64>()?;
     let origin_lon = lower_parts[1].parse::<f64>()?;
     let upper_lat = upper_parts[0].parse::<f64>()?;
     let upper_lon = upper_parts[1].parse::<f64>()?;
     
     // 解像度を計算
-    let x_res = (upper_lon - origin_lon) / (cols - 1) as f64;
-    let y_res = (upper_lat - origin_lat) / (rows - 1) as f64;
+    let x_res = if cols > 1 {
+        (upper_lon - origin_lon) / (cols - 1) as f64
+    } else {
+        upper_lon - origin_lon
+    };
+    let y_res = if rows > 1 {
+        (upper_lat - origin_lat) / (rows - 1) as f64
+    } else {
+        upper_lat - origin_lat
+    };
     
     // startPointを解析
     let start_parts: Vec<&str> = start_point.split_whitespace().collect();
@@ -173,7 +182,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
         rows,
         cols,
         origin_lon,
-        origin_lat,
+        origin_lat: upper_lat,  // DEMの原点は左上なので上端の緯度を使用
         x_res,
         y_res,
         values,

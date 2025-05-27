@@ -20,14 +20,6 @@ struct Args {
     /// 並列処理スレッド数（デフォルト: CPUコア数）
     #[arg(short, long)]
     threads: Option<usize>,
-
-    /// Deflate圧縮を有効化
-    #[arg(short, long)]
-    compress: bool,
-
-    /// タイリングを有効化
-    #[arg(long)]
-    tiling: bool,
 }
 
 fn main() -> Result<()> {
@@ -67,38 +59,38 @@ fn main() -> Result<()> {
 
 fn process_file(path: &Path, args: &Args) -> Result<()> {
     info!("Processing file: {:?}", path);
-    
-    use std::fs::File;
-    use std::io::BufReader;
+
     use gsi_dem::parser::parse_dem_xml;
     use gsi_dem::writer::GeoTiffWriter;
-    
+    use std::fs::File;
+    use std::io::BufReader;
+
     // XMLファイルを解析
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let dem_tile = parse_dem_xml(reader)?;
-    
-    info!("Parsed successfully: {} ({}x{})", 
-          dem_tile.metadata.meshcode, 
-          dem_tile.rows, 
-          dem_tile.cols);
-    
+
+    info!(
+        "Parsed successfully: {} ({}x{})",
+        dem_tile.metadata.meshcode, dem_tile.rows, dem_tile.cols
+    );
+
     // 出力ファイル名を生成（メッシュコード.tif）
     let output_filename = format!("{}.tif", dem_tile.metadata.meshcode);
     let output_path = args.output.join(&output_filename);
-    
+
     // GeoTIFFに変換
-    let writer = GeoTiffWriter::new(args.compress, args.tiling);
+    let writer = GeoTiffWriter::new();
     writer.write(&dem_tile, &output_path)?;
-    
+
     info!("Written GeoTIFF: {:?}", output_path);
-    
+
     Ok(())
 }
 
 fn process_directory(dir: &Path, args: &Args) -> Result<()> {
     use rayon::prelude::*;
-    
+
     // XMLファイルを再帰的に収集
     let xml_files = collect_xml_files(dir)?;
     info!("Found {} XML files", xml_files.len());
@@ -108,7 +100,7 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
         .par_iter()
         .map(|file| process_file(file, args))
         .collect();
-    
+
     // エラーをチェック
     let mut errors = Vec::new();
     for (i, result) in results.into_iter().enumerate() {
@@ -116,7 +108,7 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
             errors.push(format!("{}: {}", xml_files[i].display(), e));
         }
     }
-    
+
     if !errors.is_empty() {
         error!("Failed to process {} files:", errors.len());
         for err in &errors {

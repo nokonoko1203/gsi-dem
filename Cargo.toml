@@ -2,8 +2,33 @@
 name = "gsi-dem"
 version = "0.1.0"
 edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "基盤地図情報DEM XMLをGeoTIFFに変換するCLIツール"
+readme = "README.md"
+repository = "https://github.com/yourusername/gsi-dem"
+license = "MIT"
+keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
+categories = ["command-line-utilities", "science::geo"]
+exclude = [
+    "test_dir/*",
+    "test_output/*",
+    ".github/*",
+    "examples/*",
+    "python/*",
+    "*.tif",
+    "*.xml",
+]
+
+[lib]
+name = "gsi_dem"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["pyo3"]
 
 [dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"], optional = true }
 anyhow = "1.0.98"
 clap = { version = "4.5.38", features = ["derive"] }
 gdal = "0.18.0"
