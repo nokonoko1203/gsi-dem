@@ -3,9 +3,9 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "gsi-dem"
+name = "japan-dem"
 version = "0.1.0"
-description = "Python bindings for GSI DEM XML parser"
+description = "Python bindings for japan DEM XML parser"
 authors = [{name = "Your Name", email = "your.email@example.com"}]
 readme = "README_PYTHON.md"
 requires-python = ">=3.9"
@@ -21,7 +21,7 @@ classifiers = [
 
 [tool.maturin]
 features = ["python"]
-module-name = "gsi_dem"
+module-name = "japan_dem"
 # python-source = "python"
 
 [tool.uv]

@@ -46,10 +46,12 @@ fn main() -> Result<()> {
 
     // 入力パスの処理
     if args.input.is_file() {
-        let ext = args.input.extension()
+        let ext = args
+            .input
+            .extension()
             .and_then(|s| s.to_str())
             .unwrap_or("");
-        
+
         match ext {
             "zip" => {
                 // ZIPファイルの処理
@@ -81,8 +83,8 @@ fn main() -> Result<()> {
 fn process_file(path: &Path, args: &Args) -> Result<()> {
     info!("Processing file: {:?}", path);
 
-    use gsi_dem::parser::parse_dem_xml;
-    use gsi_dem::writer::GeoTiffWriter;
+    use japan_dem::parser::parse_dem_xml;
+    use japan_dem::writer::GeoTiffWriter;
     use std::fs::File;
     use std::io::BufReader;
 
@@ -119,11 +121,9 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
     // 並列処理でファイルを変換
     let results: Vec<Result<()>> = input_files
         .par_iter()
-        .map(|(path, file_type)| {
-            match file_type {
-                FileType::Xml => process_file(path, args),
-                FileType::Zip => process_zip_file(path, args),
-            }
+        .map(|(path, file_type)| match file_type {
+            FileType::Xml => process_file(path, args),
+            FileType::Zip => process_zip_file(path, args),
         })
         .collect();
 
@@ -176,43 +176,44 @@ enum FileType {
 }
 
 fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
-    use gsi_dem::{ZipHandler, MergedDemTile};
-    use gsi_dem::writer::GeoTiffWriter;
-    
+    use japan_dem::writer::GeoTiffWriter;
+    use japan_dem::{MergedDemTile, ZipHandler};
+
     let handler = ZipHandler::new(path);
     let tiles = handler.process_all_tiles()?;
-    
+
     if args.merge && tiles.len() > 1 {
         // タイルを結合して出力
         info!("Merging {} tiles", tiles.len());
         let merged = MergedDemTile::from_tiles(tiles)?;
         let dem_tile = merged.to_dem_tile();
-        
+
         // 出力ファイル名を生成（ZIPファイル名から.zipを除いたもの）
-        let stem = path.file_stem()
+        let stem = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("merged");
         let output_filename = format!("{}.tif", stem);
         let output_path = args.output.join(&output_filename);
-        
+
         // GeoTIFFに変換
         let writer = GeoTiffWriter::new();
         writer.write(&dem_tile, &output_path)?;
-        
+
         info!("Written merged GeoTIFF: {:?}", output_path);
     } else {
         // 各タイルを個別に出力
         info!("Writing {} tiles individually", tiles.len());
         let writer = GeoTiffWriter::new();
-        
+
         for tile in tiles {
             let output_filename = format!("{}.tif", tile.metadata.meshcode);
             let output_path = args.output.join(&output_filename);
-            
+
             writer.write(&tile, &output_path)?;
             info!("Written GeoTIFF: {:?}", output_path);
         }
     }
-    
+
     Ok(())
 }

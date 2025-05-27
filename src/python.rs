@@ -1,11 +1,11 @@
-use pyo3::prelude::*;
 use crate::model::DemTile;
 use crate::parser;
+use pyo3::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
 
 #[pymodule]
-fn gsi_dem(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn japan_dem(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDemTile>()?;
     m.add_class::<PyMetadata>()?;
     m.add_function(wrap_pyfunction!(parse_dem_xml, m)?)?;
@@ -76,8 +76,13 @@ impl PyDemTile {
     fn __repr__(&self) -> String {
         format!(
             "DemTile(rows={}, cols={}, origin=({}, {}), resolution=({}, {}), mesh_code={})",
-            self.rows, self.cols, self.origin_lon, self.origin_lat, 
-            self.x_res, self.y_res, self.metadata.mesh_code
+            self.rows,
+            self.cols,
+            self.origin_lon,
+            self.origin_lat,
+            self.x_res,
+            self.y_res,
+            self.metadata.mesh_code
         )
     }
 }
@@ -94,12 +99,14 @@ impl PyMetadata {
 
 #[pyfunction]
 pub fn parse_dem_xml(path: &str) -> PyResult<PyDemTile> {
-    let file = File::open(path)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open file: {}", e)))?;
+    let file = File::open(path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open file: {}", e))
+    })?;
     let reader = BufReader::new(file);
-    
-    let dem_tile = parser::parse_dem_xml(reader)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to parse XML: {}", e)))?;
-    
+
+    let dem_tile = parser::parse_dem_xml(reader).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to parse XML: {}", e))
+    })?;
+
     Ok(PyDemTile::from(dem_tile))
 }

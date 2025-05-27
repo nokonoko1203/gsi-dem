@@ -1,6 +1,6 @@
-# QGIS プラグインでの gsi-dem 統合ガイド
+# QGIS プラグインでの japan-dem 統合ガイド
 
-QGISプラグインから `gsi-dem` Python バインディングを使用する方法について説明します。
+QGISプラグインから `japan-dem` Python バインディングを使用する方法について説明します。
 
 ## 配布方法の選択
 
@@ -16,10 +16,10 @@ your_qgis_plugin/
 ├── metadata.txt
 ├── your_plugin.py
 ├── libs/                          # ライブラリ格納用ディレクトリ
-│   ├── gsi_dem-0.1.0-cp39-cp39-win_amd64.whl
-│   ├── gsi_dem-0.1.0-cp39-cp39-macosx_10_12_x86_64.whl
-│   ├── gsi_dem-0.1.0-cp39-cp39-macosx_11_0_arm64.whl
-│   └── gsi_dem-0.1.0-cp39-cp39-linux_x86_64.whl
+│   ├── japan_dem-0.1.0-cp39-cp39-win_amd64.whl
+│   ├── japan_dem-0.1.0-cp39-cp39-macosx_10_12_x86_64.whl
+│   ├── japan_dem-0.1.0-cp39-cp39-macosx_11_0_arm64.whl
+│   └── japan_dem-0.1.0-cp39-cp39-linux_x86_64.whl
 └── utils/
     └── installer.py              # インストールヘルパー
 ```
@@ -37,43 +37,43 @@ def get_wheel_filename():
     """プラットフォームに応じた wheel ファイル名を返す"""
     system = platform.system().lower()
     machine = platform.machine().lower()
-    
+
     if system == 'windows':
-        return 'gsi_dem-0.1.0-cp39-cp39-win_amd64.whl'
+        return 'japan_dem-0.1.0-cp39-cp39-win_amd64.whl'
     elif system == 'darwin':  # macOS
         if machine == 'arm64':
-            return 'gsi_dem-0.1.0-cp39-cp39-macosx_11_0_arm64.whl'
+            return 'japan_dem-0.1.0-cp39-cp39-macosx_11_0_arm64.whl'
         else:
-            return 'gsi_dem-0.1.0-cp39-cp39-macosx_10_12_x86_64.whl'
+            return 'japan_dem-0.1.0-cp39-cp39-macosx_10_12_x86_64.whl'
     elif system == 'linux':
-        return 'gsi_dem-0.1.0-cp39-cp39-linux_x86_64.whl'
+        return 'japan_dem-0.1.0-cp39-cp39-linux_x86_64.whl'
     else:
         raise RuntimeError(f"Unsupported platform: {system}")
 
-def install_gsi_dem():
-    """gsi-dem をローカルにインストール"""
+def install_japan_dem():
+    """japan-dem をローカルにインストール"""
     try:
-        import gsi_dem
+        import japan_dem
         return True  # すでにインストール済み
     except ImportError:
         pass
-    
+
     # プラグインディレクトリを取得
     plugin_dir = Path(__file__).parent.parent
     libs_dir = plugin_dir / 'libs'
-    
+
     # 適切な wheel ファイルを選択
     wheel_file = libs_dir / get_wheel_filename()
-    
+
     if not wheel_file.exists():
         raise FileNotFoundError(f"Wheel file not found: {wheel_file}")
-    
+
     # pip でインストール
     subprocess.check_call([
-        sys.executable, '-m', 'pip', 'install', 
+        sys.executable, '-m', 'pip', 'install',
         '--user', '--force-reinstall', str(wheel_file)
     ])
-    
+
     return True
 ```
 
@@ -83,19 +83,19 @@ def install_gsi_dem():
 # __init__.py
 def classFactory(iface):
     from .your_plugin import YourPlugin
-    
-    # gsi-dem のインストールを試みる
+
+    # japan-dem のインストールを試みる
     try:
-        from .utils.installer import install_gsi_dem
-        install_gsi_dem()
+        from .utils.installer import install_japan_dem
+        install_japan_dem()
     except Exception as e:
         from qgis.core import QgsMessageLog, Qgis
         QgsMessageLog.logMessage(
-            f"Failed to install gsi-dem: {str(e)}", 
-            'YourPlugin', 
+            f"Failed to install japan-dem: {str(e)}",
+            'YourPlugin',
             Qgis.Warning
         )
-    
+
     return YourPlugin(iface)
 ```
 
@@ -110,17 +110,17 @@ your_qgis_plugin/
 ├── __init__.py
 ├── metadata.txt
 ├── your_plugin.py
-└── gsi_dem/                      # ビルド済みモジュール
+└── japan_dem/                      # ビルド済みモジュール
     ├── __init__.py
-    ├── gsi_dem.cpython-39-darwin.so     # macOS用
-    ├── gsi_dem.cp39-win_amd64.pyd       # Windows用
-    └── gsi_dem.cpython-39-x86_64-linux-gnu.so  # Linux用
+    ├── japan_dem.cpython-39-darwin.so     # macOS用
+    ├── japan_dem.cp39-win_amd64.pyd       # Windows用
+    └── japan_dem.cpython-39-x86_64-linux-gnu.so  # Linux用
 ```
 
 #### プラットフォーム別の動的ロード
 
 ```python
-# gsi_dem/__init__.py
+# japan_dem/__init__.py
 import platform
 import sys
 from pathlib import Path
@@ -130,21 +130,21 @@ system = platform.system()
 module_dir = Path(__file__).parent
 
 if system == 'Windows':
-    module_path = module_dir / 'gsi_dem.cp39-win_amd64.pyd'
+    module_path = module_dir / 'japan_dem.cp39-win_amd64.pyd'
 elif system == 'Darwin':
-    module_path = module_dir / 'gsi_dem.cpython-39-darwin.so'
+    module_path = module_dir / 'japan_dem.cpython-39-darwin.so'
 else:  # Linux
-    module_path = module_dir / 'gsi_dem.cpython-39-x86_64-linux-gnu.so'
+    module_path = module_dir / 'japan_dem.cpython-39-x86_64-linux-gnu.so'
 
 # モジュールをインポート
 import importlib.util
-spec = importlib.util.spec_from_file_location("gsi_dem", module_path)
-gsi_dem = importlib.util.module_from_spec(spec)
-sys.modules["gsi_dem"] = gsi_dem
-spec.loader.exec_module(gsi_dem)
+spec = importlib.util.spec_from_file_location("japan_dem", module_path)
+japan_dem = importlib.util.module_from_spec(spec)
+sys.modules["japan_dem"] = japan_dem
+spec.loader.exec_module(japan_dem)
 
 # 公開 API
-from gsi_dem import parse_dem_xml, DemTile, Metadata
+from japan_dem import parse_dem_xml, DemTile, Metadata
 __all__ = ['parse_dem_xml', 'DemTile', 'Metadata']
 ```
 
@@ -190,24 +190,24 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.9']  # QGIS のPythonバージョンに合わせる
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Install maturin
         run: pip install maturin
-      
+
       - name: Build wheels
         run: maturin build --release --features python --out dist
-      
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -224,47 +224,47 @@ from osgeo import gdal, osr
 import tempfile
 import os
 
-# gsi_dem をインポート（方法1または2に従って）
-import gsi_dem
+# japan_dem をインポート（方法1または2に従って）
+import japan_dem
 
 class DEMProcessor:
     def process_dem_xml(self, xml_path, output_path=None):
         """DEM XML を処理して QGIS レイヤーとして追加"""
-        
+
         # XML をパース
-        dem_tile = gsi_dem.parse_dem_xml(xml_path)
-        
+        dem_tile = japan_dem.parse_dem_xml(xml_path)
+
         # 一時ファイルまたは指定されたパスに出力
         if output_path is None:
             fd, output_path = tempfile.mkstemp(suffix='.tif')
             os.close(fd)
-        
+
         # GeoTIFF として保存
         self._save_as_geotiff(dem_tile, output_path)
-        
+
         # QGIS レイヤーとして追加
         layer_name = f"DEM_{dem_tile.metadata.mesh_code}"
         layer = QgsRasterLayer(output_path, layer_name)
-        
+
         if layer.isValid():
             QgsProject.instance().addMapLayer(layer)
             return layer
         else:
             raise RuntimeError("Failed to create raster layer")
-    
+
     def _save_as_geotiff(self, dem_tile, output_path):
         """DemTile を GeoTIFF として保存"""
         driver = gdal.GetDriverByName('GTiff')
-        
+
         # データセットを作成
         ds = driver.Create(
-            output_path, 
-            dem_tile.cols, 
-            dem_tile.rows, 
-            1, 
+            output_path,
+            dem_tile.cols,
+            dem_tile.rows,
+            1,
             gdal.GDT_Float32
         )
-        
+
         # 地理変換パラメータを設定
         geotransform = [
             dem_tile.origin_lon,
@@ -275,16 +275,16 @@ class DEMProcessor:
             -abs(dem_tile.y_res)
         ]
         ds.SetGeoTransform(geotransform)
-        
+
         # 投影法を設定 (JGD2011 / EPSG:6668)
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(6668)
         ds.SetProjection(srs.ExportToWkt())
-        
+
         # データを書き込み
         band = ds.GetRasterBand(1)
         data = np.full((dem_tile.rows, dem_tile.cols), -9999.0, dtype=np.float32)
-        
+
         # start_point を考慮してデータを配置
         start_x, start_y = dem_tile.start_point
         idx = 0
@@ -293,11 +293,11 @@ class DEMProcessor:
                 if idx < len(dem_tile.values):
                     data[row, col] = dem_tile.values[idx]
                     idx += 1
-        
+
         band.WriteArray(data)
         band.SetNoDataValue(-9999.0)
         band.FlushCache()
-        
+
         # クリーンアップ
         ds = None
 ```

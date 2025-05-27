@@ -1,4 +1,4 @@
-# GSI DEM Python バインディング
+# japan DEM Python バインディング
 
 PyO3 で構築された国土地理院 DEM XML パーサーの Python バインディングです。
 
@@ -33,10 +33,10 @@ uv run maturin develop --features python
 ### 基本的な例
 
 ```python
-import gsi_dem
+import japan_dem
 
 # DEM XML ファイルをパース
-dem_tile = gsi_dem.parse_dem_xml('path/to/dem.xml')
+dem_tile = japan_dem.parse_dem_xml('path/to/dem.xml')
 
 # プロパティにアクセス
 print(f"形状: {dem_tile.shape}")  # (行数, 列数)
@@ -54,9 +54,9 @@ print(f"最初の値: {dem_tile.values[0]}")
 
 ```python
 import numpy as np
-import gsi_dem
+import japan_dem
 
-dem_tile = gsi_dem.parse_dem_xml('path/to/dem.xml')
+dem_tile = japan_dem.parse_dem_xml('path/to/dem.xml')
 
 # NumPy 配列に変換
 # 注意: 部分データの場合は start_point を考慮する必要があります
@@ -176,7 +176,7 @@ uv run maturin build --release --features python
 uv run maturin publish --features python --repository testpypi
 
 # テストインストール
-uv pip install --index-url https://test.pypi.org/simple/ gsi-dem
+uv pip install --index-url https://test.pypi.org/simple/ japan-dem
 
 # 3. 本番 PyPI に公開
 uv run maturin publish --features python
@@ -214,16 +214,16 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Install maturin
         run: pip install maturin
-      
+
       - name: Build wheels
         run: maturin build --release --features python --out dist
-      
+
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -238,7 +238,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: wheels
-      
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -251,8 +251,8 @@ PyPI に公開後は、以下でインストールできます：
 
 ```bash
 # pip でのインストール
-pip install gsi-dem
+pip install japan-dem
 
 # uv でのインストール
-uv pip install gsi-dem
+uv pip install japan-dem
 ```

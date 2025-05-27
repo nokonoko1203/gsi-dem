@@ -195,13 +195,13 @@ ZIPファイル処理と複数DEMタイルの結合機能を実装しました�
 
 ```bash
 # ZIPファイルから個別のGeoTIFFを生成
-./gsi-dem input.zip -o output_dir
+./japan-dem input.zip -o output_dir
 
 # ZIPファイル内の全タイルを結合して1つのGeoTIFFを生成
-./gsi-dem input.zip -o output_dir --merge
+./japan-dem input.zip -o output_dir --merge
 
 # ディレクトリ内のZIPファイルとXMLファイルを処理
-./gsi-dem input_dir -o output_dir --merge
+./japan-dem input_dir -o output_dir --merge
 ```
 
 ### 技術的な詳細

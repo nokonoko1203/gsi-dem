@@ -1,5 +1,5 @@
 import pytest
-import gsi_dem
+import japan_dem
 import tempfile
 import os
 
@@ -8,7 +8,7 @@ def test_parse_dem_xml():
     """Test basic XML parsing functionality"""
     # Create a minimal test XML file based on real data structure
     test_xml = """<?xml version="1.0" encoding="UTF-8"?>
-<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_GMLSchema"
+<Dataset xmlns="http://fgd.japan.go.jp/spec/2008/FGD_GMLSchema"
          xmlns:gml="http://www.opengis.net/gml/3.2"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <DEM gml:id="DEM001">
@@ -58,7 +58,7 @@ def test_parse_dem_xml():
 
     try:
         # Parse the XML
-        dem_tile = gsi_dem.parse_dem_xml(temp_path)
+        dem_tile = japan_dem.parse_dem_xml(temp_path)
 
         # Verify basic properties
         assert dem_tile.rows == 2
@@ -98,7 +98,7 @@ def test_parse_dem_xml():
 def test_parse_invalid_file():
     """Test error handling for invalid file"""
     with pytest.raises(IOError):
-        gsi_dem.parse_dem_xml("/nonexistent/file.xml")
+        japan_dem.parse_dem_xml("/nonexistent/file.xml")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# gsi-dem
+# japan-dem
 
 基盤地図情報DEM XMLをGeoTIFFに変換するRust製CLIツール
 
@@ -26,32 +26,32 @@
 ### crates.io からのインストール（推奨）
 
 ```bash
-cargo install gsi-dem
+cargo install japan-dem
 ```
 
 ### ソースからのビルド
 
 ```bash
 # リポジトリのクローン
-git clone https://github.com/yourusername/gsi-dem.git
-cd gsi-dem
+git clone https://github.com/yourusername/japan-dem.git
+cd japan-dem
 
 # リリースビルド
 cargo build --release
 
-# バイナリは target/release/gsi-dem に生成されます
+# バイナリは target/release/japan-dem に生成されます
 ```
 
 ## 使用方法
 
 ### 単一ファイルの変換
 ```bash
-gsi-dem input.xml -o output_dir/
+japan-dem input.xml -o output_dir/
 ```
 
 ### ディレクトリ一括変換
 ```bash
-gsi-dem input_dir/ -o output_dir/ --threads 4
+japan-dem input_dir/ -o output_dir/ --threads 4
 ```
 
 ### オプション
@@ -81,15 +81,15 @@ cargo login <your-api-token>
 
 ```toml
 [package]
-name = "gsi-dem"
+name = "japan-dem"
 version = "0.1.0"
 edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 description = "基盤地図情報DEM XMLをGeoTIFFに変換するCLIツール"
 readme = "README.md"
-repository = "https://github.com/yourusername/gsi-dem"
+repository = "https://github.com/yourusername/japan-dem"
 license = "MIT"
-keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
+keywords = ["gis", "dem", "geotiff", "japan", "japan"]
 categories = ["command-line-utilities", "science::geo"]
 
 # 除外ファイルの設定
@@ -103,7 +103,7 @@ exclude = [
 
 # バイナリの指定
 [[bin]]
-name = "gsi-dem"
+name = "japan-dem"
 path = "src/main.rs"
 ```
 
@@ -139,15 +139,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Install GDAL
         run: |
           sudo apt-get update
           sudo apt-get install -y gdal-bin libgdal-dev
-      
+
       - name: Publish to crates.io
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         env:

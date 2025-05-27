@@ -1,11 +1,11 @@
 [package]
-name = "gsi-dem"
+name = "japan-dem"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "基盤地図情報DEM XMLをGeoTIFFに変換するCLIツール"
+authors = ["nokonoko_1203 <email@example.com>"]
+description = "A CLI tool to convert Japan DEM XML to GeoTIFF."
 readme = "README.md"
-repository = "https://github.com/yourusername/gsi-dem"
+repository = "https://github.com/yourusername/japan-dem"
 license = "MIT"
 keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
 categories = ["command-line-utilities", "science::geo"]
@@ -20,7 +20,7 @@ exclude = [
 ]
 
 [lib]
-name = "gsi_dem"
+name = "japan_dem"
 crate-type = ["cdylib", "rlib"]
 
 [features]

@@ -11,7 +11,6 @@ pub enum DemError {
     // TODO: GDALエラーは後で追加
     // #[error("GDAL error: {0}")]
     // Gdal(#[from] gdal::errors::GdalError),
-
     #[error("Parse error: {0}")]
     Parse(String),
 

@@ -8,7 +8,7 @@ use crate::model::{DemTile, Metadata};
 pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     let mut xml_reader = Reader::from_reader(reader);
     xml_reader.config_mut().trim_text(true);
-    
+
     let mut meshcode = None;
     let mut dem_type = None;
     let mut crs_identifier = None;
@@ -17,7 +17,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     let mut upper_corner = None;
     let mut start_point = None;
     let mut values = Vec::new();
-    
+
     let mut in_mesh = false;
     let mut in_type = false;
     let mut in_envelope = false;
@@ -27,9 +27,9 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     let mut in_high = false;
     let mut in_tuple_list = false;
     let mut in_start_point = false;
-    
+
     let mut buf = Vec::new();
-    
+
     loop {
         match xml_reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
@@ -76,7 +76,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
                         if line.is_empty() {
                             continue;
                         }
-                        
+
                         // カンマで分割し、2番目の要素（標高値）を取得
                         let parts: Vec<&str> = line.split(',').collect();
                         if parts.len() >= 2 {
@@ -107,7 +107,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
         }
         buf.clear();
     }
-    
+
     // 必須フィールドの検証
     let meshcode = meshcode.context("meshcode not found")?;
     let dem_type = dem_type.context("dem_type not found")?;
@@ -116,7 +116,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     let lower_corner = lower_corner.context("lower_corner not found")?;
     let upper_corner = upper_corner.context("upper_corner not found")?;
     let start_point = start_point.unwrap_or_else(|| "0 0".to_string());
-    
+
     // グリッドサイズを解析（high値 + 1）
     let high_parts: Vec<&str> = grid_high.split_whitespace().collect();
     if high_parts.len() != 2 {
@@ -124,20 +124,20 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     }
     let cols = high_parts[0].parse::<usize>()? + 1;
     let rows = high_parts[1].parse::<usize>()? + 1;
-    
+
     // 座標を解析
     let lower_parts: Vec<&str> = lower_corner.split_whitespace().collect();
     let upper_parts: Vec<&str> = upper_corner.split_whitespace().collect();
     if lower_parts.len() != 2 || upper_parts.len() != 2 {
         return Err(anyhow::anyhow!("Invalid corner coordinate format"));
     }
-    
+
     // JGD2011 (fguuid:jgd2011.bl) uses lat,lon order
     let origin_lat = lower_parts[0].parse::<f64>()?;
     let origin_lon = lower_parts[1].parse::<f64>()?;
     let upper_lat = upper_parts[0].parse::<f64>()?;
     let upper_lon = upper_parts[1].parse::<f64>()?;
-    
+
     // 解像度を計算
     let x_res = if cols > 1 {
         (upper_lon - origin_lon) / (cols - 1) as f64
@@ -149,16 +149,16 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     } else {
         upper_lat - origin_lat
     };
-    
+
     // startPointを解析
     let start_parts: Vec<&str> = start_point.split_whitespace().collect();
     let start_x = if start_parts.len() >= 1 { start_parts[0].parse::<usize>()? } else { 0 };
     let start_y = if start_parts.len() >= 2 { start_parts[1].parse::<usize>()? } else { 0 };
-    
+
     // startPointを考慮した実際のデータ数を計算
     // startPoint(1056, 0)は最初の1056列がデータ無しを意味する
     let expected_values = rows * cols - start_x;
-    
+
     // 値の数を検証
     if values.len() != expected_values {
         return Err(anyhow::anyhow!(
@@ -166,18 +166,18 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
             expected_values, rows, cols, start_x, values.len()
         ));
     }
-    
+
     // startPointの分だけ-9999（NoData）を先頭に追加
     let mut full_values = vec![-9999.0; start_x];
     full_values.extend(values);
     let values = full_values;
-    
+
     let metadata = Metadata {
         meshcode,
         dem_type,
         crs_identifier,
     };
-    
+
     Ok(DemTile {
         rows,
         cols,
@@ -199,11 +199,11 @@ pub fn parse_dem_xml_from_bytes(bytes: &[u8]) -> Result<DemTile> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_simple_dem() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
-<Dataset xmlns="http://fgd.gsi.go.jp/spec/2008/FGD_GMLSchema" xmlns:gml="http://www.opengis.net/gml/3.2">
+<Dataset xmlns="http://fgd.japan.go.jp/spec/2008/FGD_GMLSchema" xmlns:gml="http://www.opengis.net/gml/3.2">
 <DEM>
     <mesh>12345678</mesh>
     <type>1mメッシュ（標高）</type>
@@ -241,7 +241,7 @@ mod tests {
     </coverage>
 </DEM>
 </Dataset>"#;
-        
+
         let result = parse_dem_xml(xml.as_bytes()).unwrap();
         assert_eq!(result.rows, 2);
         assert_eq!(result.cols, 2);
