@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "japan-dem"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python bindings for japan DEM XML parser"
 authors = [{name = "nokonoko1203", email = "email@example.com"}]
 readme = "README_PYTHON.md"
