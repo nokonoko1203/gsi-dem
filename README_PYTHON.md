@@ -72,10 +72,6 @@ for row in range(start_y, dem_tile.rows):
             idx += 1
 ```
 
-### QGIS プラグインでの統合
-
-QGIS プラグインでバインディングを使用する完全な例は `examples/qgis_plugin_example.py` を参照してください。
-
 ## API リファレンス
 
 ### 関数
@@ -133,126 +129,6 @@ uv run python python/tests/test_parser.py
 # 現在のプラットフォーム用のwheel をビルド
 uv run maturin build --release --features python
 
-# ユニバーサル wheel をビルド（可能な場合）
-uv run maturin build --release --features python --universal2
-
 # wheel は target/wheels/ に出力されます
 ```
 
-### PyPI への公開
-
-#### 初回設定
-
-```bash
-# PyPI アカウントの作成
-# https://pypi.org/account/register/ でアカウントを作成
-
-# API トークンの取得
-# https://pypi.org/manage/account/token/ でトークンを生成
-
-# maturin での認証設定（以下のいずれか）
-# 方法1: 環境変数を使用
-export MATURIN_PYPI_TOKEN="pypi-AgEIcH..."
-
-# 方法2: パスワードを使用（非推奨）
-export MATURIN_USERNAME="__token__"
-export MATURIN_PASSWORD="pypi-AgEIcH..."
-```
-
-#### ビルドと公開
-
-```bash
-# 1. すべてのプラットフォーム用のwheel をビルド
-# Linux (manylinux)
-uv run maturin build --release --features python --compatibility manylinux2014
-
-# macOS (Intel + Apple Silicon)
-uv run maturin build --release --features python --universal2
-
-# Windows
-uv run maturin build --release --features python
-
-# 2. TestPyPI でテスト（推奨）
-uv run maturin publish --features python --repository testpypi
-
-# テストインストール
-uv pip install --index-url https://test.pypi.org/simple/ japan-dem
-
-# 3. 本番 PyPI に公開
-uv run maturin publish --features python
-```
-
-#### GitHub Actions での自動リリース
-
-`.github/workflows/release.yml` を作成して自動化できます：
-
-```yaml
-name: Release
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  release:
-    name: Release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64
-          - os: windows-latest
-            target: x86_64
-          - os: macos-latest
-            target: x86_64
-          - os: macos-latest
-            target: aarch64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install maturin
-        run: pip install maturin
-
-      - name: Build wheels
-        run: maturin build --release --features python --out dist
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: dist
-
-  publish:
-    name: Publish
-    runs-on: ubuntu-latest
-    needs: [release]
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: wheels
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-```
-
-### インストール確認
-
-PyPI に公開後は、以下でインストールできます：
-
-```bash
-# pip でのインストール
-pip install japan-dem
-
-# uv でのインストール
-uv pip install japan-dem
-```
