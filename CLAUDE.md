@@ -153,64 +153,6 @@ examples/
 * [x] L-07: Python テストコードを作成 (`python/tests/test_parser.py`)
 * [x] L-08: QGIS プラグイン向けのサンプルコードを作成 (`examples/qgis_plugin_example.py`)
 
-## 4. Python バインディング詳細
-
-### ビルド方法
-
-```bash
-# maturin のインストール
-pip install maturin
-
-# 開発モードでビルド
-maturin develop --features python
-
-# リリースビルド
-maturin build --release --features python
-```
-
-### 公開 API
-
-- `parse_dem_xml(path: str) -> DemTile`: XML ファイルを解析して DemTile オブジェクトを返す
-- `DemTile`: DEM データを表すクラス（rows, cols, origin_lon, origin_lat, x_res, y_res, values, start_point, metadata）
-- `Metadata`: メタデータクラス（mesh_code, dem_type, crs_identifier）
-
-### QGIS での使用
-
-QGISプラグインで使用する場合は、ビルドした Python モジュールを QGIS の Python 環境にインストールして使用可能。
-詳細は `examples/qgis_plugin_example.py` を参照。
-
-## 5. ZIP ファイル処理と複数 DEM 結合の実装詳細
-
-### 実装内容
-
-ZIPファイル処理と複数DEMタイルの結合機能を実装しました。主な特徴：
-
-- **ZIPファイル対応**: 基盤地図情報のZIPアーカイブ（`FG-GML-****-DEM*A.zip`形式）を直接処理
-- **メモリ効率的な処理**: XMLファイルを一時ファイルに展開せずメモリ上で処理
-- **10x10グリッド対応**: メッシュコードの下2桁（YX形式）を解析し、正しい位置にタイルを配置
-- **重複ピクセル処理**: 隣接タイルの1ピクセル重複を適切に処理し、シームレスな結合を実現
-- **座標系の反転処理**: メッシュコードのY座標（北が大）と画像の行インデックス（上から下）の違いを考慮
-
-### 使用方法
-
-```bash
-# ZIPファイルから個別のGeoTIFFを生成
-./japan-dem input.zip -o output_dir
-
-# ZIPファイル内の全タイルを結合して1つのGeoTIFFを生成
-./japan-dem input.zip -o output_dir --merge
-
-# ディレクトリ内のZIPファイルとXMLファイルを処理
-./japan-dem input_dir -o output_dir --merge
-```
-
-### 技術的な詳細
-
-- `src/zip_handler.rs`: ZIP処理とタイル結合のロジック
-- `MergedDemTile`: 複数タイルを結合するためのデータ構造
-- グリッド配置計算: `grid_y = mesh_code下2桁 / 10`, `grid_x = mesh_code下2桁 % 10`
-- Y座標反転: `inverted_y = 9 - grid_y`（画像座標系への変換）
-
 ### M. ZIP ファイル処理と複数 DEM 結合
 
 * [x] M-01: ZIP ファイル読み込み用の依存関係を追加（`zip` crate）
