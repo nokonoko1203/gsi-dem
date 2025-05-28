@@ -1,14 +1,20 @@
 use crate::model::DemTile;
 use crate::parser;
+use crate::terrain_rgb::{TerrainRgbConfig, RgbDepth, elevation_to_rgb, rgb_to_elevation};
+use crate::writer::GeoTiffWriter;
 use pyo3::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 
 #[pymodule]
 fn japan_dem(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDemTile>()?;
     m.add_class::<PyMetadata>()?;
     m.add_function(wrap_pyfunction!(parse_dem_xml, m)?)?;
+    m.add_function(wrap_pyfunction!(dem_to_terrain_rgb, m)?)?;
+    m.add_function(wrap_pyfunction!(elevation_to_rgb_py, m)?)?;
+    m.add_function(wrap_pyfunction!(rgb_to_elevation_py, m)?)?;
     Ok(())
 }
 
@@ -109,4 +115,58 @@ pub fn parse_dem_xml(path: &str) -> PyResult<PyDemTile> {
     })?;
 
     Ok(PyDemTile::from(dem_tile))
+}
+
+impl From<PyDemTile> for DemTile {
+    fn from(py_tile: PyDemTile) -> Self {
+        DemTile {
+            rows: py_tile.rows,
+            cols: py_tile.cols,
+            origin_lon: py_tile.origin_lon,
+            origin_lat: py_tile.origin_lat,
+            x_res: py_tile.x_res,
+            y_res: py_tile.y_res,
+            values: py_tile.values,
+            start_point: py_tile.start_point,
+            metadata: crate::model::Metadata {
+                meshcode: py_tile.metadata.mesh_code,
+                dem_type: py_tile.metadata.dem_type,
+                crs_identifier: py_tile.metadata.crs_identifier,
+            },
+        }
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (dem_tile, output_path, rgb_depth=8, min_elevation=None, max_elevation=None))]
+pub fn dem_to_terrain_rgb(
+    dem_tile: PyDemTile,
+    output_path: &str,
+    rgb_depth: u8,
+    min_elevation: Option<f32>,
+    max_elevation: Option<f32>,
+) -> PyResult<()> {
+    let config = TerrainRgbConfig {
+        depth: match rgb_depth {
+            16 => RgbDepth::Rgb16,
+            _ => RgbDepth::Rgb8,
+        },
+        min_elevation,
+        max_elevation,
+    };
+
+    let dem_tile: DemTile = dem_tile.into();
+    let writer = GeoTiffWriter::new();
+    writer.write_terrain_rgb(&dem_tile, Path::new(output_path), &config)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to convert to terrain RGB: {}", e)))
+}
+
+#[pyfunction]
+pub fn elevation_to_rgb_py(elevation: f32) -> (u8, u8, u8) {
+    elevation_to_rgb(elevation)
+}
+
+#[pyfunction]
+pub fn rgb_to_elevation_py(r: u8, g: u8, b: u8) -> f32 {
+    rgb_to_elevation(r, g, b)
 }

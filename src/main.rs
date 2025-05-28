@@ -24,6 +24,22 @@ struct Args {
     /// 複数のDEMタイルを結合して出力
     #[arg(long)]
     merge: bool,
+
+    /// Terrain-RGB形式で出力
+    #[arg(long)]
+    terrain_rgb: bool,
+
+    /// Terrain-RGBの出力形式（8bit または 16bit）
+    #[arg(long, value_name = "DEPTH", default_value = "8")]
+    rgb_depth: u8,
+
+    /// 最小標高値（手動設定）
+    #[arg(long)]
+    min_elevation: Option<f32>,
+
+    /// 最大標高値（手動設定）
+    #[arg(long)]
+    max_elevation: Option<f32>,
 }
 
 fn main() -> Result<()> {
@@ -85,6 +101,7 @@ fn process_file(path: &Path, args: &Args) -> Result<()> {
 
     use japan_dem::parser::parse_dem_xml;
     use japan_dem::writer::GeoTiffWriter;
+    use japan_dem::{RgbDepth, TerrainRgbConfig};
     use std::fs::File;
     use std::io::BufReader;
 
@@ -98,15 +115,32 @@ fn process_file(path: &Path, args: &Args) -> Result<()> {
         dem_tile.metadata.meshcode, dem_tile.rows, dem_tile.cols
     );
 
-    // 出力ファイル名を生成（メッシュコード.tif）
-    let output_filename = format!("{}.tif", dem_tile.metadata.meshcode);
-    let output_path = args.output.join(&output_filename);
+    if args.terrain_rgb {
+        // Terrain-RGB形式で出力
+        let output_filename = format!("{}_terrain_rgb.tif", dem_tile.metadata.meshcode);
+        let output_path = args.output.join(&output_filename);
 
-    // GeoTIFFに変換
-    let writer = GeoTiffWriter::new();
-    writer.write(&dem_tile, &output_path)?;
+        let config = TerrainRgbConfig {
+            depth: match args.rgb_depth {
+                16 => RgbDepth::Rgb16,
+                _ => RgbDepth::Rgb8,
+            },
+            min_elevation: args.min_elevation,
+            max_elevation: args.max_elevation,
+        };
 
-    info!("Written GeoTIFF: {:?}", output_path);
+        let writer = GeoTiffWriter::new();
+        writer.write_terrain_rgb(&dem_tile, &output_path, &config)?;
+        info!("Written Terrain-RGB: {:?}", output_path);
+    } else {
+        // 通常のGeoTIFF形式で出力
+        let output_filename = format!("{}.tif", dem_tile.metadata.meshcode);
+        let output_path = args.output.join(&output_filename);
+
+        let writer = GeoTiffWriter::new();
+        writer.write(&dem_tile, &output_path)?;
+        info!("Written GeoTIFF: {:?}", output_path);
+    }
 
     Ok(())
 }
@@ -177,7 +211,7 @@ enum FileType {
 
 fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
     use japan_dem::writer::GeoTiffWriter;
-    use japan_dem::{MergedDemTile, ZipHandler};
+    use japan_dem::{MergedDemTile, RgbDepth, TerrainRgbConfig, ZipHandler};
 
     let handler = ZipHandler::new(path);
     let tiles = handler.process_all_tiles()?;
@@ -193,25 +227,67 @@ fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("merged");
-        let output_filename = format!("{}.tif", stem);
-        let output_path = args.output.join(&output_filename);
 
-        // GeoTIFFに変換
-        let writer = GeoTiffWriter::new();
-        writer.write(&dem_tile, &output_path)?;
+        if args.terrain_rgb {
+            // Terrain-RGB形式で出力
+            let output_filename = format!("{}_terrain_rgb.tif", stem);
+            let output_path = args.output.join(&output_filename);
 
-        info!("Written merged GeoTIFF: {:?}", output_path);
+            let config = TerrainRgbConfig {
+                depth: match args.rgb_depth {
+                    16 => RgbDepth::Rgb16,
+                    _ => RgbDepth::Rgb8,
+                },
+                min_elevation: args.min_elevation,
+                max_elevation: args.max_elevation,
+            };
+
+            let writer = GeoTiffWriter::new();
+            writer.write_terrain_rgb(&dem_tile, &output_path, &config)?;
+            info!("Written merged Terrain-RGB: {:?}", output_path);
+        } else {
+            // 通常のGeoTIFF形式で出力
+            let output_filename = format!("{}.tif", stem);
+            let output_path = args.output.join(&output_filename);
+
+            let writer = GeoTiffWriter::new();
+            writer.write(&dem_tile, &output_path)?;
+            info!("Written merged GeoTIFF: {:?}", output_path);
+        }
     } else {
         // 各タイルを個別に出力
         info!("Writing {} tiles individually", tiles.len());
-        let writer = GeoTiffWriter::new();
 
-        for tile in tiles {
-            let output_filename = format!("{}.tif", tile.metadata.meshcode);
-            let output_path = args.output.join(&output_filename);
+        if args.terrain_rgb {
+            // Terrain-RGB形式で出力
+            let config = TerrainRgbConfig {
+                depth: match args.rgb_depth {
+                    16 => RgbDepth::Rgb16,
+                    _ => RgbDepth::Rgb8,
+                },
+                min_elevation: args.min_elevation,
+                max_elevation: args.max_elevation,
+            };
 
-            writer.write(&tile, &output_path)?;
-            info!("Written GeoTIFF: {:?}", output_path);
+            for tile in tiles {
+                let output_filename = format!("{}_terrain_rgb.tif", tile.metadata.meshcode);
+                let output_path = args.output.join(&output_filename);
+
+                let writer = GeoTiffWriter::new();
+                writer.write_terrain_rgb(&tile, &output_path, &config)?;
+                info!("Written Terrain-RGB: {:?}", output_path);
+            }
+        } else {
+            // 通常のGeoTIFF形式で出力
+            let writer = GeoTiffWriter::new();
+
+            for tile in tiles {
+                let output_filename = format!("{}.tif", tile.metadata.meshcode);
+                let output_path = args.output.join(&output_filename);
+
+                writer.write(&tile, &output_path)?;
+                info!("Written GeoTIFF: {:?}", output_path);
+            }
         }
     }
 

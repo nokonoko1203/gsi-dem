@@ -29,7 +29,7 @@ cargo install japan-dem
 
 ```bash
 # リポジトリのクローン
-git clone https://github.com/yourusername/japan-dem.git
+git clone https://github.com/nokonoko1203/japan-dem.git
 cd japan-dem
 
 # リリースビルド
@@ -42,7 +42,7 @@ cargo build --release
 
 ### 単一(zip/xml)ファイルの変換
 ```bash
-japan-dem FG-GML-644131-DEM1A-20250227.zip -o test_output --threads 4 --merge
+japan-dem input.zip -o test_output --threads 4 --merge
 ```
 
 ### ディレクトリ一括変換
@@ -54,7 +54,18 @@ japan-dem input_dir/ -o output_dir --threads 4 --merge
 - `-o, --output <DIR>`: 出力ディレクトリ（必須）
 - `--threads <NUM>`: 並列処理スレッド数（デフォルト: CPUコア数）
 - `--merge`: 複数XMLを1つのGeoTIFFにマージ
+- `--terrain-rgb`: Terrain-RGB形式のGeoTIFFで出力（標高値をRGB値にエンコード）
+- `--rgb-depth <DEPTH>`: Terrain-RGBの出力形式（8または16、デフォルト: 8）
 
-## ライセンス
+### Terrain-RGB形式での出力
 
-MIT License
+Terrain-RGB形式は、標高値をRGB値にエンコードした形式で、Web地図タイルなどで利用されます。
+出力されるGeoTIFFは通常のGeoTIFFと同じ地理参照情報を持ち、GISソフトウェアで利用可能です。
+
+```bash
+# 8bit Terrain-RGB形式で出力（ファイル名: メッシュコード_terrain_rgb.tif）
+japan-dem input.xml -o output_dir --terrain-rgb
+
+# 16bit高精度Terrain-RGB形式で出力
+japan-dem input.zip -o output_dir --terrain-rgb --rgb-depth 16
+```
