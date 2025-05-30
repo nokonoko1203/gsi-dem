@@ -1,6 +1,6 @@
 use crate::model::DemTile;
 use crate::parser;
-use crate::terrain_rgb::{TerrainRgbConfig, RgbDepth, elevation_to_rgb, rgb_to_elevation};
+use crate::terrain_rgb::{TerrainRgbConfig, elevation_to_rgb, rgb_to_elevation};
 use crate::writer::GeoTiffWriter;
 use pyo3::prelude::*;
 use std::fs::File;
@@ -138,19 +138,14 @@ impl From<PyDemTile> for DemTile {
 }
 
 #[pyfunction]
-#[pyo3(signature = (dem_tile, output_path, rgb_depth=8, min_elevation=None, max_elevation=None))]
+#[pyo3(signature = (dem_tile, output_path, min_elevation=None, max_elevation=None))]
 pub fn dem_to_terrain_rgb(
     dem_tile: PyDemTile,
     output_path: &str,
-    rgb_depth: u8,
     min_elevation: Option<f32>,
     max_elevation: Option<f32>,
 ) -> PyResult<()> {
     let config = TerrainRgbConfig {
-        depth: match rgb_depth {
-            16 => RgbDepth::Rgb16,
-            _ => RgbDepth::Rgb8,
-        },
         min_elevation,
         max_elevation,
     };

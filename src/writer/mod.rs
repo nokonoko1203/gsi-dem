@@ -5,7 +5,7 @@ use gdal::{DriverManager, Metadata};
 use std::path::Path;
 
 use crate::model::DemTile;
-use crate::terrain_rgb::{TerrainRgbConfig, RgbDepth, elevation_to_rgb, elevation_to_rgb16};
+use crate::terrain_rgb::{TerrainRgbConfig, elevation_to_rgb};
 
 const NODATA_VALUE: f64 = -9999.0;
 
@@ -21,7 +21,7 @@ impl GeoTiffWriter {
         self.write_standard(dem_tile, output_path)
     }
 
-    pub fn write_terrain_rgb(&self, dem_tile: &DemTile, output_path: &Path, config: &TerrainRgbConfig) -> Result<()> {
+    pub fn write_terrain_rgb(&self, dem_tile: &DemTile, output_path: &Path, _config: &TerrainRgbConfig) -> Result<()> {
         let (rows, cols) = dem_tile.shape();
         
         tracing::info!(
@@ -33,76 +33,38 @@ impl GeoTiffWriter {
         let driver = DriverManager::get_driver_by_name("GTiff")
             .context("Failed to get GTiff driver")?;
 
-        match config.depth {
-            RgbDepth::Rgb8 => {
-                // 8-bit RGB GeoTIFFを作成
-                let mut dataset = driver
-                    .create_with_band_type::<u8, _>(
-                        output_path,
-                        cols,
-                        rows,
-                        3, // RGB 3バンド
-                    )
-                    .context("Failed to create dataset")?;
+        // 8-bit RGB GeoTIFFを作成
+        let mut dataset = driver
+            .create_with_band_type::<u8, _>(
+                output_path,
+                cols,
+                rows,
+                3, // RGB 3バンド
+            )
+            .context("Failed to create dataset")?;
 
-                self.set_geo_metadata(&mut dataset, dem_tile)?;
+        self.set_geo_metadata(&mut dataset, dem_tile)?;
 
-                // RGBデータを準備
-                let mut r_band = vec![0u8; cols * rows];
-                let mut g_band = vec![0u8; cols * rows];
-                let mut b_band = vec![0u8; cols * rows];
+        // RGBデータを準備
+        let mut r_band = vec![0u8; cols * rows];
+        let mut g_band = vec![0u8; cols * rows];
+        let mut b_band = vec![0u8; cols * rows];
 
-                for (i, &elevation) in dem_tile.values.iter().enumerate() {
-                    if elevation == -9999.0 {
-                        r_band[i] = 0;
-                        g_band[i] = 0;
-                        b_band[i] = 0;
-                    } else {
-                        let (r, g, b) = elevation_to_rgb(elevation);
-                        r_band[i] = r;
-                        g_band[i] = g;
-                        b_band[i] = b;
-                    }
-                }
-
-                // バンドにデータを書き込み
-                self.write_rgb_bands(&mut dataset, cols, rows, r_band, g_band, b_band)?;
-            }
-            RgbDepth::Rgb16 => {
-                // 16-bit RGB GeoTIFFを作成
-                let mut dataset = driver
-                    .create_with_band_type::<u16, _>(
-                        output_path,
-                        cols,
-                        rows,
-                        3, // RGB 3バンド
-                    )
-                    .context("Failed to create dataset")?;
-
-                self.set_geo_metadata(&mut dataset, dem_tile)?;
-
-                // RGBデータを準備
-                let mut r_band = vec![0u16; cols * rows];
-                let mut g_band = vec![0u16; cols * rows];
-                let mut b_band = vec![0u16; cols * rows];
-
-                for (i, &elevation) in dem_tile.values.iter().enumerate() {
-                    if elevation == -9999.0 {
-                        r_band[i] = 0;
-                        g_band[i] = 0;
-                        b_band[i] = 0;
-                    } else {
-                        let (r, g, b) = elevation_to_rgb16(elevation);
-                        r_band[i] = r;
-                        g_band[i] = g;
-                        b_band[i] = b;
-                    }
-                }
-
-                // バンドにデータを書き込み
-                self.write_rgb16_bands(&mut dataset, cols, rows, r_band, g_band, b_band)?;
+        for (i, &elevation) in dem_tile.values.iter().enumerate() {
+            if elevation == -9999.0 {
+                r_band[i] = 0;
+                g_band[i] = 0;
+                b_band[i] = 0;
+            } else {
+                let (r, g, b) = elevation_to_rgb(elevation);
+                r_band[i] = r;
+                g_band[i] = g;
+                b_band[i] = b;
             }
         }
+
+        // バンドにデータを書き込み
+        self.write_rgb_bands(&mut dataset, cols, rows, r_band, g_band, b_band)?;
 
         Ok(())
     }
@@ -227,28 +189,6 @@ impl GeoTiffWriter {
         Ok(())
     }
 
-    fn write_rgb16_bands(&self, dataset: &mut gdal::Dataset, cols: usize, rows: usize,
-                        r_band: Vec<u16>, g_band: Vec<u16>, b_band: Vec<u16>) -> Result<()> {
-        // バンド1 (R)
-        let mut band = dataset.rasterband(1).context("Failed to get raster band 1")?;
-        let mut buffer = Buffer::new((cols, rows), r_band);
-        band.write((0, 0), (cols, rows), &mut buffer)
-            .context("Failed to write R band")?;
-
-        // バンド2 (G)
-        let mut band = dataset.rasterband(2).context("Failed to get raster band 2")?;
-        let mut buffer = Buffer::new((cols, rows), g_band);
-        band.write((0, 0), (cols, rows), &mut buffer)
-            .context("Failed to write G band")?;
-
-        // バンド3 (B)
-        let mut band = dataset.rasterband(3).context("Failed to get raster band 3")?;
-        let mut buffer = Buffer::new((cols, rows), b_band);
-        band.write((0, 0), (cols, rows), &mut buffer)
-            .context("Failed to write B band")?;
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -300,7 +240,6 @@ mod tests {
 
         // Terrain-RGB出力
         let config = TerrainRgbConfig {
-            depth: RgbDepth::Rgb8,
             min_elevation: None,
             max_elevation: None,
         };

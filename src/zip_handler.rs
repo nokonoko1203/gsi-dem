@@ -79,24 +79,28 @@ impl ZipHandler {
         self.validate_filename()?;
         let xml_files = self.extract_xml_files()?;
 
-        let mut tiles = Vec::new();
-
-        for (name, contents) in xml_files {
-            info!("Processing XML file: {}", name);
-
-            match parser::parse_dem_xml_from_bytes(&contents) {
-                Ok(tile) => {
-                    debug!(
-                        "Successfully parsed tile with mesh code: {:?}",
-                        tile.metadata.meshcode
-                    );
-                    tiles.push(tile);
+        use rayon::prelude::*;
+        
+        let tiles: Vec<DemTile> = xml_files
+            .into_par_iter()
+            .filter_map(|(name, contents)| {
+                info!("Processing XML file: {}", name);
+                
+                match parser::parse_dem_xml_from_bytes(&contents) {
+                    Ok(tile) => {
+                        debug!(
+                            "Successfully parsed tile with mesh code: {:?}",
+                            tile.metadata.meshcode
+                        );
+                        Some(tile)
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse XML file {}: {}", name, e);
+                        None
+                    }
                 }
-                Err(e) => {
-                    warn!("Failed to parse XML file {}: {}", name, e);
-                }
-            }
-        }
+            })
+            .collect();
 
         if tiles.is_empty() {
             anyhow::bail!("Failed to parse any XML files from ZIP");

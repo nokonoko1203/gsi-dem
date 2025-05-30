@@ -29,9 +29,6 @@ struct Args {
     #[arg(long)]
     terrain_rgb: bool,
 
-    /// Terrain-RGBの出力形式（8bit または 16bit）
-    #[arg(long, value_name = "DEPTH", default_value = "8")]
-    rgb_depth: u8,
 
     /// 最小標高値（手動設定）
     #[arg(long)]
@@ -48,6 +45,9 @@ fn main() -> Result<()> {
 
     // CLI引数の解析
     let args = Args::parse();
+    
+    // 処理開始時間を記録
+    let start_time = std::time::Instant::now();
 
     // スレッドプールの設定
     if let Some(threads) = args.threads {
@@ -92,6 +92,10 @@ fn main() -> Result<()> {
         error!("Invalid input path: {:?}", args.input);
         anyhow::bail!("Input path must be a file or directory");
     }
+    
+    // 処理時間を表示
+    let elapsed = start_time.elapsed();
+    info!("Total processing time: {:?}", elapsed);
 
     Ok(())
 }
@@ -101,7 +105,7 @@ fn process_file(path: &Path, args: &Args) -> Result<()> {
 
     use japan_dem::parser::parse_dem_xml;
     use japan_dem::writer::GeoTiffWriter;
-    use japan_dem::{RgbDepth, TerrainRgbConfig};
+    use japan_dem::TerrainRgbConfig;
     use std::fs::File;
     use std::io::BufReader;
 
@@ -121,10 +125,6 @@ fn process_file(path: &Path, args: &Args) -> Result<()> {
         let output_path = args.output.join(&output_filename);
 
         let config = TerrainRgbConfig {
-            depth: match args.rgb_depth {
-                16 => RgbDepth::Rgb16,
-                _ => RgbDepth::Rgb8,
-            },
             min_elevation: args.min_elevation,
             max_elevation: args.max_elevation,
         };
@@ -181,25 +181,43 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
 }
 
 fn collect_input_files(dir: &Path) -> Result<Vec<(std::path::PathBuf, FileType)>> {
-    let mut files = Vec::new();
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
+    use rayon::prelude::*;
+    use std::sync::{Arc, Mutex};
+    
+    let files = Arc::new(Mutex::new(Vec::new()));
+    
+    // ディレクトリエントリを並列で収集
+    let entries: Result<Vec<_>, _> = fs::read_dir(dir)?.collect();
+    let entries = entries?;
+    
+    // エントリを並列処理
+    entries.into_par_iter().try_for_each(|entry| -> Result<()> {
         let path = entry.path();
-
+        
         if path.is_dir() {
-            // 再帰的に探索
-            let mut sub_files = collect_input_files(&path)?;
-            files.append(&mut sub_files);
+            // サブディレクトリを再帰的に探索
+            let sub_files = collect_input_files(&path)?;
+            if !sub_files.is_empty() {
+                let mut files_guard = files.lock().unwrap();
+                files_guard.extend(sub_files);
+            }
         } else {
             match path.extension().and_then(|s| s.to_str()) {
-                Some("xml") => files.push((path, FileType::Xml)),
-                Some("zip") => files.push((path, FileType::Zip)),
+                Some("xml") => {
+                    let mut files_guard = files.lock().unwrap();
+                    files_guard.push((path, FileType::Xml));
+                },
+                Some("zip") => {
+                    let mut files_guard = files.lock().unwrap();
+                    files_guard.push((path, FileType::Zip));
+                },
                 _ => {}
             }
         }
-    }
-
+        Ok(())
+    })?;
+    
+    let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     Ok(files)
 }
 
@@ -211,7 +229,7 @@ enum FileType {
 
 fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
     use japan_dem::writer::GeoTiffWriter;
-    use japan_dem::{MergedDemTile, RgbDepth, TerrainRgbConfig, ZipHandler};
+    use japan_dem::{MergedDemTile, TerrainRgbConfig, ZipHandler};
 
     let handler = ZipHandler::new(path);
     let tiles = handler.process_all_tiles()?;
@@ -234,10 +252,6 @@ fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
             let output_path = args.output.join(&output_filename);
 
             let config = TerrainRgbConfig {
-                depth: match args.rgb_depth {
-                    16 => RgbDepth::Rgb16,
-                    _ => RgbDepth::Rgb8,
-                },
                 min_elevation: args.min_elevation,
                 max_elevation: args.max_elevation,
             };
@@ -261,10 +275,6 @@ fn process_zip_file(path: &Path, args: &Args) -> Result<()> {
         if args.terrain_rgb {
             // Terrain-RGB形式で出力
             let config = TerrainRgbConfig {
-                depth: match args.rgb_depth {
-                    16 => RgbDepth::Rgb16,
-                    _ => RgbDepth::Rgb8,
-                },
                 min_elevation: args.min_elevation,
                 max_elevation: args.max_elevation,
             };
