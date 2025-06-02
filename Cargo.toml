@@ -26,12 +26,13 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["pyo3"]
+bundled = ["gdal/bundled"]
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"], optional = true }
 anyhow = "1.0.98"
 clap = { version = "4.5.38", features = ["derive"] }
-gdal = "0.18.0"
+gdal = { version = "0.18.0", git = "https://github.com/yutannihilation/gdal-rs", branch = "feat/expose-bundled-feature" }
 quick-xml = "0.37.5"
 rayon = "1.10.0"
 thiserror = "2.0.12"
@@ -41,3 +42,8 @@ zip = "2.2"
 
 [dev-dependencies]
 tempfile = "3.20.0"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
