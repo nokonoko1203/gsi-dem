@@ -80,12 +80,12 @@ impl ZipHandler {
         let xml_files = self.extract_xml_files()?;
 
         use rayon::prelude::*;
-        
+
         let tiles: Vec<DemTile> = xml_files
             .into_par_iter()
             .filter_map(|(name, contents)| {
                 info!("Processing XML file: {}", name);
-                
+
                 match parser::parse_dem_xml_from_bytes(&contents) {
                     Ok(tile) => {
                         debug!(
@@ -248,7 +248,7 @@ impl MergedDemTile {
 
             // グリッド位置に基づくオフセット計算（重複を考慮）
             let grid_offset_x = (grid_x - min_grid_x) as usize;
-            let grid_offset_y = (grid_y - min_grid_y) as usize;
+            let _grid_offset_y = (grid_y - min_grid_y) as usize;
 
             // メッシュコードのY座標は北が大きい（Y=9が最北端）
             // 画像の行インデックスは上から下へ増加する

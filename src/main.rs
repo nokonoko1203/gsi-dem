@@ -4,7 +4,6 @@ use rayon::ThreadPoolBuilder;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
-use tracing_subscriber;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -29,7 +28,6 @@ struct Args {
     #[arg(long)]
     terrain_rgb: bool,
 
-
     /// 最小標高値（手動設定）
     #[arg(long)]
     min_elevation: Option<f32>,
@@ -45,7 +43,7 @@ fn main() -> Result<()> {
 
     // CLI引数の解析
     let args = Args::parse();
-    
+
     // 処理開始時間を記録
     let start_time = std::time::Instant::now();
 
@@ -92,7 +90,7 @@ fn main() -> Result<()> {
         error!("Invalid input path: {:?}", args.input);
         anyhow::bail!("Input path must be a file or directory");
     }
-    
+
     // 処理時間を表示
     let elapsed = start_time.elapsed();
     info!("Total processing time: {:?}", elapsed);
@@ -183,40 +181,42 @@ fn process_directory(dir: &Path, args: &Args) -> Result<()> {
 fn collect_input_files(dir: &Path) -> Result<Vec<(std::path::PathBuf, FileType)>> {
     use rayon::prelude::*;
     use std::sync::{Arc, Mutex};
-    
+
     let files = Arc::new(Mutex::new(Vec::new()));
-    
+
     // ディレクトリエントリを並列で収集
     let entries: Result<Vec<_>, _> = fs::read_dir(dir)?.collect();
     let entries = entries?;
-    
+
     // エントリを並列処理
-    entries.into_par_iter().try_for_each(|entry| -> Result<()> {
-        let path = entry.path();
-        
-        if path.is_dir() {
-            // サブディレクトリを再帰的に探索
-            let sub_files = collect_input_files(&path)?;
-            if !sub_files.is_empty() {
-                let mut files_guard = files.lock().unwrap();
-                files_guard.extend(sub_files);
-            }
-        } else {
-            match path.extension().and_then(|s| s.to_str()) {
-                Some("xml") => {
+    entries
+        .into_par_iter()
+        .try_for_each(|entry| -> Result<()> {
+            let path = entry.path();
+
+            if path.is_dir() {
+                // サブディレクトリを再帰的に探索
+                let sub_files = collect_input_files(&path)?;
+                if !sub_files.is_empty() {
                     let mut files_guard = files.lock().unwrap();
-                    files_guard.push((path, FileType::Xml));
-                },
-                Some("zip") => {
-                    let mut files_guard = files.lock().unwrap();
-                    files_guard.push((path, FileType::Zip));
-                },
-                _ => {}
+                    files_guard.extend(sub_files);
+                }
+            } else {
+                match path.extension().and_then(|s| s.to_str()) {
+                    Some("xml") => {
+                        let mut files_guard = files.lock().unwrap();
+                        files_guard.push((path, FileType::Xml));
+                    }
+                    Some("zip") => {
+                        let mut files_guard = files.lock().unwrap();
+                        files_guard.push((path, FileType::Zip));
+                    }
+                    _ => {}
+                }
             }
-        }
-        Ok(())
-    })?;
-    
+            Ok(())
+        })?;
+
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     Ok(files)
 }
