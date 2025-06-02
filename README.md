@@ -7,10 +7,10 @@
 本ツールは、国土地理院が提供する基盤地図情報数値標高モデル（DEM）のXMLファイルやZIPアーカイブを、高速並列処理でGeoTIFF形式に変換します。
 
 ### 主な機能
-- **高速並列処理**: マルチスレッドによる高速変換（最大3倍の速度向上）
+- **高速並列処理**: マルチスレッドによる高速変換
 - **ZIPファイル対応**: 圧縮されたDEMデータを直接処理
 - **タイル結合**: 複数のDEMタイルを1つのGeoTIFFに統合
-- **Terrain-RGB出力**: Web地図用のRGBエンコード標高データ
+- **Terrain-RGB出力**: WebGIS用のRGBエンコード標高データ
 - **Python バインディング**: QGIS プラグインなどでの利用
 
 ### 対応フォーマット
@@ -37,7 +37,7 @@ cd japan-dem
 # リリースビルド
 cargo build --release
 
-# バイナリは target/release/japan-dem に生成されます
+# バイナリは`target/release/japan-dem`に生成されます
 ```
 
 ## 使用方法
@@ -80,7 +80,7 @@ Terrain-RGB形式は、標高値をRGB値にエンコードした8bit形式で�
 japan-dem input.xml -o output_dir --terrain-rgb
 ```
 
-## Python バインディング
+## Pythonバインディング
 
 QGIS プラグインやPythonスクリプトからの利用が可能です。
 
