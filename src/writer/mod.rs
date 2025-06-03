@@ -214,8 +214,8 @@ mod tests {
     use super::*;
     use crate::model::{DemTile, Metadata};
     use gdal::Dataset;
-    use tempfile::TempDir;
     use std::sync::Once;
+    use tempfile::TempDir;
 
     static INIT: Once = Once::new();
 
@@ -224,7 +224,7 @@ mod tests {
             // GDALの初期化を試みる
             // bundled版では自動的に初期化されるはず
         });
-        
+
         // GTiffドライバーが利用可能かチェック
         DriverManager::get_driver_by_name("GTiff").is_ok()
     }
