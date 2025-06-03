@@ -3,19 +3,10 @@ use crate::model::DemTile;
 #[derive(Debug, Clone, Copy)]
 pub struct RgbDepth;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TerrainRgbConfig {
     pub min_elevation: Option<f32>,
     pub max_elevation: Option<f32>,
-}
-
-impl Default for TerrainRgbConfig {
-    fn default() -> Self {
-        Self {
-            min_elevation: None,
-            max_elevation: None,
-        }
-    }
 }
 
 pub fn elevation_to_rgb(elevation: f32) -> (u8, u8, u8) {

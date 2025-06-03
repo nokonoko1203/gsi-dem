@@ -156,7 +156,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
 
     // startPointを解析
     let start_parts: Vec<&str> = start_point.split_whitespace().collect();
-    let start_x = if start_parts.len() >= 1 {
+    let start_x = if !start_parts.is_empty() {
         start_parts[0].parse::<usize>()?
     } else {
         0
