@@ -1,7 +1,7 @@
-use std::io::{BufRead, Cursor};
 use anyhow::{Context, Result};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
+use std::io::{BufRead, Cursor};
 
 use crate::model::{DemTile, Metadata};
 
@@ -42,14 +42,19 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
                         for attr in e.attributes() {
                             let attr = attr?;
                             if attr.key.as_ref() == b"srsName" {
-                                crs_identifier = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                crs_identifier =
+                                    Some(String::from_utf8_lossy(&attr.value).to_string());
                             }
                         }
                     }
                     b"lowerCorner" => in_lower_corner = true,
                     b"upperCorner" => in_upper_corner = true,
                     b"GridEnvelope" => in_grid_envelope = true,
-                    b"high" => if in_grid_envelope { in_high = true; }
+                    b"high" => {
+                        if in_grid_envelope {
+                            in_high = true;
+                        }
+                    }
                     b"tupleList" => in_tuple_list = true,
                     b"startPoint" => in_start_point = true,
                     _ => {}
@@ -80,27 +85,26 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
                         // カンマで分割し、2番目の要素（標高値）を取得
                         let parts: Vec<&str> = line.split(',').collect();
                         if parts.len() >= 2 {
-                            let elevation = parts[1].trim().parse::<f32>()
-                                .with_context(|| format!("Failed to parse elevation: {}", parts[1]))?;
+                            let elevation = parts[1].trim().parse::<f32>().with_context(|| {
+                                format!("Failed to parse elevation: {}", parts[1])
+                            })?;
                             values.push(elevation);
                         }
                     }
                 }
             }
-            Ok(Event::End(e)) => {
-                match e.local_name().as_ref() {
-                    b"mesh" => in_mesh = false,
-                    b"type" => in_type = false,
-                    b"Envelope" => in_envelope = false,
-                    b"lowerCorner" => in_lower_corner = false,
-                    b"upperCorner" => in_upper_corner = false,
-                    b"GridEnvelope" => in_grid_envelope = false,
-                    b"high" => in_high = false,
-                    b"tupleList" => in_tuple_list = false,
-                    b"startPoint" => in_start_point = false,
-                    _ => {}
-                }
-            }
+            Ok(Event::End(e)) => match e.local_name().as_ref() {
+                b"mesh" => in_mesh = false,
+                b"type" => in_type = false,
+                b"Envelope" => in_envelope = false,
+                b"lowerCorner" => in_lower_corner = false,
+                b"upperCorner" => in_upper_corner = false,
+                b"GridEnvelope" => in_grid_envelope = false,
+                b"high" => in_high = false,
+                b"tupleList" => in_tuple_list = false,
+                b"startPoint" => in_start_point = false,
+                _ => {}
+            },
             Ok(Event::Eof) => break,
             Err(e) => return Err(anyhow::anyhow!("XML parse error: {}", e)),
             _ => {}
@@ -152,8 +156,16 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
 
     // startPointを解析
     let start_parts: Vec<&str> = start_point.split_whitespace().collect();
-    let start_x = if start_parts.len() >= 1 { start_parts[0].parse::<usize>()? } else { 0 };
-    let start_y = if start_parts.len() >= 2 { start_parts[1].parse::<usize>()? } else { 0 };
+    let start_x = if start_parts.len() >= 1 {
+        start_parts[0].parse::<usize>()?
+    } else {
+        0
+    };
+    let start_y = if start_parts.len() >= 2 {
+        start_parts[1].parse::<usize>()?
+    } else {
+        0
+    };
 
     // startPointを考慮した実際のデータ数を計算
     // startPoint(1056, 0)は最初の1056列がデータ無しを意味する
@@ -163,7 +175,11 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
     if values.len() != expected_values {
         return Err(anyhow::anyhow!(
             "Value count mismatch: expected {} ({}x{} - start_x {}), got {}",
-            expected_values, rows, cols, start_x, values.len()
+            expected_values,
+            rows,
+            cols,
+            start_x,
+            values.len()
         ));
     }
 
@@ -182,7 +198,7 @@ pub fn parse_dem_xml<R: BufRead>(reader: R) -> Result<DemTile> {
         rows,
         cols,
         origin_lon,
-        origin_lat: upper_lat,  // DEMの原点は左上なので上端の緯度を使用
+        origin_lat: upper_lat, // DEMの原点は左上なので上端の緯度を使用
         x_res,
         y_res,
         values,
