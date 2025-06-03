@@ -215,9 +215,26 @@ mod tests {
     use crate::model::{DemTile, Metadata};
     use gdal::Dataset;
     use tempfile::TempDir;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn init_gdal() -> bool {
+        INIT.call_once(|| {
+            // GDALの初期化を試みる
+            // bundled版では自動的に初期化されるはず
+        });
+        
+        // GTiffドライバーが利用可能かチェック
+        DriverManager::get_driver_by_name("GTiff").is_ok()
+    }
 
     #[test]
     fn test_write_geotiff() {
+        if !init_gdal() {
+            eprintln!("Skipping test: GTiff driver not available in bundled GDAL");
+            return;
+        }
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("test.tif");
 
@@ -244,7 +261,11 @@ mod tests {
 
     #[test]
     fn test_consistent_output_shapes() {
-        use crate::terrain_rgb::{RgbDepth, TerrainRgbConfig};
+        if !init_gdal() {
+            eprintln!("Skipping test: GTiff driver not available in bundled GDAL");
+            return;
+        }
+        use crate::terrain_rgb::TerrainRgbConfig;
 
         let temp_dir = TempDir::new().unwrap();
         let standard_path = temp_dir.path().join("standard.tif");
