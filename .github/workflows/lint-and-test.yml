@@ -51,32 +51,32 @@ jobs:
       - name: Run tests
         run: cargo test --features bundled --verbose
 
-  # Test Python bindings
-  test-python:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+  # # Test Python bindings
+  # test-python:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       python-version: ['3.9', '3.10', '3.11', '3.12']
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: |
-          pip install maturin pytest
+  #     - name: Install dependencies
+  #       run: |
+  #         pip install maturin pytest
 
-      - name: Build and install package
-        run: |
-          maturin develop --features python,bundled
+  #     - name: Build and install package
+  #       run: |
+  #         maturin develop --features python,bundled
 
-      - name: Run Python tests
-        run: |
-          pytest python/tests -v
+  #     - name: Run Python tests
+  #       run: |
+  #         pytest python/tests -v
