@@ -1,6 +1,6 @@
 [package]
 name = "japan-dem"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["nokonoko1203 <email@example.com>"]
 description = "A CLI tool to convert Japan DEM XML to GeoTIFF."
