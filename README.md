@@ -21,10 +21,15 @@
 
 ## インストール
 
-### crates.io からのインストール（推奨）
+### バイナリのインストール
+
+`${VERSION}` を最新のリリースバージョンに置き換えてください。
+最新のバージョンは [GitHub Releases](https://github.com/nokonoko1203/japan-dem/releases) で確認できます。
 
 ```bash
-cargo install japan-dem
+$ cargo install japan-dem
+or
+$ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/nokonoko1203/japan-dem/releases/download/${VERSION}/japan-dem-installer.sh | sh
 ```
 
 ### ソースからのビルド
