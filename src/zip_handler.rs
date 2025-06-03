@@ -166,11 +166,7 @@ impl MergedDemTile {
             .iter()
             .map(|t| {
                 // start_pointがある場合は、実際のデータ終了位置を計算
-                let actual_end_col = if t.start_point.0 > 0 {
-                    t.cols - 1 // 最後の列まで
-                } else {
-                    t.cols - 1 // 通常のタイルも最後の列まで
-                };
+                let actual_end_col = t.cols - 1; // 最後の列まで
                 t.origin_lon + (actual_end_col as f64 * t.x_res)
             })
             .max_by(|a, b| a.partial_cmp(b).unwrap())

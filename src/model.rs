@@ -50,7 +50,7 @@ impl DemTile {
             -self.y_res.abs(), // 負の値（北から南へ）
         ]
     }
-    
+
     /// 座標系識別子からEPSGコードを推定
     pub fn guess_epsg(&self) -> Option<u32> {
         match self.metadata.crs_identifier.as_str() {

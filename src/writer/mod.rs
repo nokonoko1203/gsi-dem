@@ -5,7 +5,7 @@ use gdal::{DriverManager, Metadata};
 use std::path::Path;
 
 use crate::model::DemTile;
-use crate::terrain_rgb::{TerrainRgbConfig, elevation_to_rgb};
+use crate::terrain_rgb::{elevation_to_rgb, TerrainRgbConfig};
 
 const NODATA_VALUE: f64 = -9999.0;
 
@@ -21,17 +21,23 @@ impl GeoTiffWriter {
         self.write_standard(dem_tile, output_path)
     }
 
-    pub fn write_terrain_rgb(&self, dem_tile: &DemTile, output_path: &Path, _config: &TerrainRgbConfig) -> Result<()> {
+    pub fn write_terrain_rgb(
+        &self,
+        dem_tile: &DemTile,
+        output_path: &Path,
+        _config: &TerrainRgbConfig,
+    ) -> Result<()> {
         let (rows, cols) = dem_tile.shape();
-        
+
         tracing::info!(
             "Converting DEM to Terrain-RGB GeoTIFF: {} x {} pixels",
-            cols, rows
+            cols,
+            rows
         );
-        
+
         // GTiffドライバーを取得
-        let driver = DriverManager::get_driver_by_name("GTiff")
-            .context("Failed to get GTiff driver")?;
+        let driver =
+            DriverManager::get_driver_by_name("GTiff").context("Failed to get GTiff driver")?;
 
         // 8-bit RGB GeoTIFFを作成
         let mut dataset = driver
@@ -166,29 +172,41 @@ impl GeoTiffWriter {
         Ok(())
     }
 
-    fn write_rgb_bands(&self, dataset: &mut gdal::Dataset, cols: usize, rows: usize, 
-                      r_band: Vec<u8>, g_band: Vec<u8>, b_band: Vec<u8>) -> Result<()> {
+    fn write_rgb_bands(
+        &self,
+        dataset: &mut gdal::Dataset,
+        cols: usize,
+        rows: usize,
+        r_band: Vec<u8>,
+        g_band: Vec<u8>,
+        b_band: Vec<u8>,
+    ) -> Result<()> {
         // バンド1 (R)
-        let mut band = dataset.rasterband(1).context("Failed to get raster band 1")?;
+        let mut band = dataset
+            .rasterband(1)
+            .context("Failed to get raster band 1")?;
         let mut buffer = Buffer::new((cols, rows), r_band);
         band.write((0, 0), (cols, rows), &mut buffer)
             .context("Failed to write R band")?;
 
         // バンド2 (G)
-        let mut band = dataset.rasterband(2).context("Failed to get raster band 2")?;
+        let mut band = dataset
+            .rasterband(2)
+            .context("Failed to get raster band 2")?;
         let mut buffer = Buffer::new((cols, rows), g_band);
         band.write((0, 0), (cols, rows), &mut buffer)
             .context("Failed to write G band")?;
 
         // バンド3 (B)
-        let mut band = dataset.rasterband(3).context("Failed to get raster band 3")?;
+        let mut band = dataset
+            .rasterband(3)
+            .context("Failed to get raster band 3")?;
         let mut buffer = Buffer::new((cols, rows), b_band);
         band.write((0, 0), (cols, rows), &mut buffer)
             .context("Failed to write B band")?;
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -196,10 +214,27 @@ mod tests {
     use super::*;
     use crate::model::{DemTile, Metadata};
     use gdal::Dataset;
+    use std::sync::Once;
     use tempfile::TempDir;
+
+    static INIT: Once = Once::new();
+
+    fn init_gdal() -> bool {
+        INIT.call_once(|| {
+            // GDALの初期化を試みる
+            // bundled版では自動的に初期化されるはず
+        });
+
+        // GTiffドライバーが利用可能かチェック
+        DriverManager::get_driver_by_name("GTiff").is_ok()
+    }
 
     #[test]
     fn test_write_geotiff() {
+        if !init_gdal() {
+            eprintln!("Skipping test: GTiff driver not available in bundled GDAL");
+            return;
+        }
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("test.tif");
 
@@ -226,8 +261,12 @@ mod tests {
 
     #[test]
     fn test_consistent_output_shapes() {
-        use crate::terrain_rgb::{TerrainRgbConfig, RgbDepth};
-        
+        if !init_gdal() {
+            eprintln!("Skipping test: GTiff driver not available in bundled GDAL");
+            return;
+        }
+        use crate::terrain_rgb::TerrainRgbConfig;
+
         let temp_dir = TempDir::new().unwrap();
         let standard_path = temp_dir.path().join("standard.tif");
         let terrain_rgb_path = temp_dir.path().join("terrain_rgb.tif");
@@ -243,24 +282,33 @@ mod tests {
             min_elevation: None,
             max_elevation: None,
         };
-        writer.write_terrain_rgb(&dem_tile, &terrain_rgb_path, &config).unwrap();
+        writer
+            .write_terrain_rgb(&dem_tile, &terrain_rgb_path, &config)
+            .unwrap();
 
         // 両方のファイルをGDALで読み返す
         let standard_dataset = Dataset::open(&standard_path).unwrap();
         let terrain_rgb_dataset = Dataset::open(&terrain_rgb_path).unwrap();
 
         // 形状が一致することを確認
-        assert_eq!(standard_dataset.raster_size(), terrain_rgb_dataset.raster_size());
+        assert_eq!(
+            standard_dataset.raster_size(),
+            terrain_rgb_dataset.raster_size()
+        );
         assert_eq!(standard_dataset.raster_size(), (3, 2)); // (cols, rows)
 
         // ジオトランスフォームが一致することを確認
         let standard_transform = standard_dataset.geo_transform().unwrap();
         let terrain_rgb_transform = terrain_rgb_dataset.geo_transform().unwrap();
-        
+
         for i in 0..6 {
-            assert!((standard_transform[i] - terrain_rgb_transform[i]).abs() < 1e-10,
-                   "Geo transforms differ at index {}: {} vs {}", 
-                   i, standard_transform[i], terrain_rgb_transform[i]);
+            assert!(
+                (standard_transform[i] - terrain_rgb_transform[i]).abs() < 1e-10,
+                "Geo transforms differ at index {}: {} vs {}",
+                i,
+                standard_transform[i],
+                terrain_rgb_transform[i]
+            );
         }
 
         // 座標系が一致することを確認
