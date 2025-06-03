@@ -32,7 +32,7 @@ bundled = ["gdal/bundled"]
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"], optional = true }
 anyhow = "1.0.98"
 clap = { version = "4.5.38", features = ["derive"] }
-gdal = { git = "https://github.com/yutannihilation/gdal-rs", branch = "feat/expose-bundled-feature" }
+gdal = { git = "https://github.com/yutannihilation/gdal-rs", branch = "feat/expose-bundled-feature", features = ["bundled"] }
 quick-xml = "0.37.5"
 rayon = "1.10.0"
 thiserror = "2.0.12"
