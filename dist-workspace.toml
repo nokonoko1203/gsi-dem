@@ -25,9 +25,16 @@ targets = [
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# By default , cargo-dist uses --workspace, but we want to build only 
+
+# By default, cargo-dist uses --workspace, but we want to build only 
 # cli to avoid "output filename collision." error.
 precise-builds = true
+
+# Set RUSTFLAGS
+# cf.
+#  - https://github.com/astral-sh/cargo-dist/pull/36#issuecomment-2895135231
+#  - https://github.com/axodotdev/cargo-dist/issues/1571
+github-build-setup = "../cargo-dist-envvars.yml"
 
 [dist.dependencies.homebrew]
 
