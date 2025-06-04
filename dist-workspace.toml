@@ -19,15 +19,15 @@ targets = [
   # "aarch64-unknown-linux-gnu",
   "x86_64-apple-darwin",
   "x86_64-unknown-linux-gnu",
-  # TODO: link.exe fails with 1120 error. Some incompatibility with other C++ libraries...?
-  # "x86_64-pc-windows-msvc"
+  "x86_64-pc-windows-msvc"
 ]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# Use the bundled version of GDAL
-features = ["bundled"]
+# By default , cargo-dist uses --workspace, but we want to build only 
+# cli to avoid "output filename collision." error.
+precise-builds = true
 
 [dist.dependencies.homebrew]
 

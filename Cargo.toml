@@ -23,7 +23,6 @@ clap = { version = "4.5.38", features = ["derive"] }
 tracing-subscriber = "0.3.19"
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
 tempfile = "3.20.0"
-japan-dem = { path = ".", version = "0.1.4" }
 
 
 ### japan-dem crate ###
