@@ -1,12 +1,12 @@
 [package]
 name = "japan-dem-py"
-version = "0.1.4"
-edition = "2021"
-authors = ["nokonoko1203 <email@example.com>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "Python bindings for japan-dem - converts Japan DEM XML to GeoTIFF"
 readme = "../README_PYTHON.md"
-repository = "https://github.com/nokonoko1203/japan-dem"
-license = "MIT"
+repository.workspace = true
+license.workspace = true
 keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
 categories = ["api-bindings", "science::geo"]
 publish = false
@@ -16,5 +16,5 @@ name = "japan_dem"
 crate-type = ["cdylib"]
 
 [dependencies]
-japan-dem = { path = "..", version = "0.1.4", features = ["bundled"]}
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
+japan-dem = { path = "..", features = ["bundled"]}
+pyo3.workspace = true

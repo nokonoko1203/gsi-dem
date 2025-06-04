@@ -1,16 +1,42 @@
+### Workspace settings ###
+
 [workspace]
 members = [".", "japan-dem-cli", "japan-dem-py"]
 resolver = "2"
 
-[package]
-name = "japan-dem"
+[workspace.package]
 version = "0.1.4"
 edition = "2021"
 authors = ["nokonoko1203 <email@example.com>"]
+license = "MIT"
+repository = "https://github.com/nokonoko1203/japan-dem"
+
+[workspace.dependencies]
+anyhow = "1.0.98"
+gdal = "0.18"
+quick-xml = "0.37.5"
+rayon = "1.10.0"
+thiserror = "2.0.12"
+tracing = "0.1.41"
+zip = "2.2"
+clap = { version = "4.5.38", features = ["derive"] }
+tracing-subscriber = "0.3.19"
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
+tempfile = "3.20.0"
+japan-dem = { path = ".", version = "0.1.4" }
+
+
+### japan-dem crate ###
+
+[package]
+name = "japan-dem"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "A library to convert Japan DEM XML to GeoTIFF."
 readme = "README.md"
-repository = "https://github.com/nokonoko1203/japan-dem"
-license = "MIT"
+repository.workspace = true
+license.workspace = true
 keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
 categories = ["science::geo"]
 exclude = [
@@ -32,16 +58,16 @@ default = []
 bundled = ["gdal/bundled"]
 
 [dependencies]
-anyhow = "1.0.98"
-gdal = "0.18"
-quick-xml = "0.37.5"
-rayon = "1.10.0"
-thiserror = "2.0.12"
-tracing = "0.1.41"
-zip = "2.2"
+anyhow.workspace = true
+gdal.workspace = true
+quick-xml.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
-tempfile = "3.20.0"
+tempfile.workspace = true
 
 # The profile that 'dist' will build with
 [profile.dist]
