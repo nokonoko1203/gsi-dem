@@ -1,7 +1,11 @@
 # cf. https://github.com/astral-sh/cargo-dist/pull/36#issuecomment-2895135231
-[target.x86_64-pc-windows-msvc]
-rustflags = [
-    "-Ctarget-feature=+crt-static",
-    "-Clink-args=/DEFAULTLIB:ucrt.lib",
-    "-Clink-args=/NODEFAULTLIB:libucrt.lib",
-]
+# 
+# Uncomment the following lines to use the same build configuration that
+# cargo-dist uses, for testing purposes.
+
+# [target.x86_64-pc-windows-msvc]
+# rustflags = [
+#     "-Ctarget-feature=+crt-static",
+#     "-Clink-args=/DEFAULTLIB:ucrt.lib",
+#     "-Clink-args=/NODEFAULTLIB:libucrt.lib",
+# ]

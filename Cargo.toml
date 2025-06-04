@@ -5,7 +5,7 @@ members = [".", "japan-dem-cli", "japan-dem-py"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.4"
+version = "0.1.5-rc.7"
 edition = "2021"
 authors = ["nokonoko1203 <email@example.com>"]
 license = "MIT"
