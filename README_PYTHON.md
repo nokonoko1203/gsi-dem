@@ -12,7 +12,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # maturinのインストールとPythonモジュールのビルド
 uv pip install maturin
-uv run maturin develop --release --features python
+uv run maturin develop --release
 ```
 
 ### 開発環境
@@ -25,7 +25,7 @@ uv venv
 uv pip install maturin
 
 # 開発モードでビルド
-uv run maturin develop --features python
+uv run maturin develop
 ```
 
 ## 使い方

@@ -411,7 +411,6 @@ dependencies = [
 [[package]]
 name = "gdal"
 version = "0.18.0"
-source = "git+https://github.com/yutannihilation/gdal-rs?branch=feat%2Fexpose-bundled-feature#bd4b60051b90f6ff19fb161f12dafac6e38c83be"
 dependencies = [
  "bitflags",
  "chrono",
@@ -425,7 +424,6 @@ dependencies = [
 [[package]]
 name = "gdal-src"
 version = "0.2.1+3.10.3"
-source = "git+https://github.com/yutannihilation/gdal-rs?branch=feat%2Fexpose-bundled-feature#bd4b60051b90f6ff19fb161f12dafac6e38c83be"
 dependencies = [
  "cmake",
  "libsqlite3-sys",
@@ -436,7 +434,6 @@ dependencies = [
 [[package]]
 name = "gdal-sys"
 version = "0.11.0"
-source = "git+https://github.com/yutannihilation/gdal-rs?branch=feat%2Fexpose-bundled-feature#bd4b60051b90f6ff19fb161f12dafac6e38c83be"
 dependencies = [
  "gdal-src",
  "pkg-config",
@@ -535,16 +532,33 @@ name = "japan-dem"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "clap",
  "gdal",
- "pyo3",
  "quick-xml",
  "rayon",
  "tempfile",
  "thiserror",
  "tracing",
- "tracing-subscriber",
  "zip",
+]
+
+[[package]]
+name = "japan-dem-cli"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "clap",
+ "japan-dem",
+ "rayon",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "japan-dem-py"
+version = "0.1.4"
+dependencies = [
+ "japan-dem",
+ "pyo3",
 ]
 
 [[package]]
