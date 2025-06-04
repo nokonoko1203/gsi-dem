@@ -1,14 +1,18 @@
+[workspace]
+members = [".", "japan-dem-cli", "japan-dem-py"]
+resolver = "2"
+
 [package]
 name = "japan-dem"
 version = "0.1.4"
 edition = "2021"
 authors = ["nokonoko1203 <email@example.com>"]
-description = "A CLI tool to convert Japan DEM XML to GeoTIFF."
+description = "A library to convert Japan DEM XML to GeoTIFF."
 readme = "README.md"
 repository = "https://github.com/nokonoko1203/japan-dem"
 license = "MIT"
 keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
-categories = ["command-line-utilities", "science::geo"]
+categories = ["science::geo"]
 exclude = [
     "test_dir/*",
     "test_output/*",
@@ -21,23 +25,19 @@ exclude = [
 
 [lib]
 name = "japan_dem"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [features]
 default = []
-python = ["pyo3"]
 bundled = ["gdal/bundled"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"], optional = true }
 anyhow = "1.0.98"
-clap = { version = "4.5.38", features = ["derive"] }
 gdal = "0.18"
 quick-xml = "0.37.5"
 rayon = "1.10.0"
 thiserror = "2.0.12"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
 zip = "2.2"
 
 [dev-dependencies]

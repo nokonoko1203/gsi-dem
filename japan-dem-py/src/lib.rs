@@ -1,7 +1,7 @@
-use crate::model::DemTile;
-use crate::parser;
-use crate::terrain_rgb::{TerrainRgbConfig, elevation_to_rgb, rgb_to_elevation};
-use crate::writer::GeoTiffWriter;
+use japan_dem::model::DemTile;
+use japan_dem::parser;
+use japan_dem::terrain_rgb::{TerrainRgbConfig, elevation_to_rgb, rgb_to_elevation};
+use japan_dem::writer::GeoTiffWriter;
 use pyo3::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
@@ -128,7 +128,7 @@ impl From<PyDemTile> for DemTile {
             y_res: py_tile.y_res,
             values: py_tile.values,
             start_point: py_tile.start_point,
-            metadata: crate::model::Metadata {
+            metadata: japan_dem::model::Metadata {
                 meshcode: py_tile.metadata.mesh_code,
                 dem_type: py_tile.metadata.dem_type,
                 crs_identifier: py_tile.metadata.crs_identifier,

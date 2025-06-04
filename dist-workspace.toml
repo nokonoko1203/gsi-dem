@@ -1,5 +1,5 @@
 [workspace]
-members = ["cargo:."]
+members = ["cargo:japan-dem-cli"]
 
 # Config for 'dist'
 [dist]

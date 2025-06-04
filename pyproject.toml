@@ -20,8 +20,9 @@ classifiers = [
 ]
 
 [tool.maturin]
-features = ["python"]
 module-name = "japan_dem"
+python-source = "python"
+manifest-path = "japan-dem-py/Cargo.toml"
 
 [tool.uv]
 dev-dependencies = [
