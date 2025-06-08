@@ -1,0 +1,23 @@
+[package]
+name = "japan-dem-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "CLI tool for japan-dem - converts Japan DEM XML to GeoTIFF"
+readme = "../README.md"
+repository.workspace = true
+license.workspace = true
+keywords = ["gis", "dem", "geotiff", "japan", "gsi"]
+categories = ["command-line-utilities", "science::geo"]
+
+[[bin]]
+name = "japan-dem"
+path = "src/main.rs"
+
+[dependencies]
+japan-dem = { path = "..", features = ["bundled"]}
+anyhow.workspace = true
+clap.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

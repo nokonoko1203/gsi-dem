@@ -37,8 +37,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         rust: [stable, beta]
 
     steps:
@@ -49,8 +48,16 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install sqlite
+
       - name: Run tests
-        run: cargo test --features bundled --verbose
+        run: |
+          # to avoid "long path" error on Windows
+          git config --global core.longpaths true
+
+          cargo test --features bundled --verbose
 
   # # Test Python bindings
   # test-python:

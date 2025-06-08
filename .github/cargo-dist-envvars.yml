@@ -1,0 +1,4 @@
+- name: Add RUSTFLAGS
+  if: runner.os == 'Windows'
+  run: echo RUSTFLAGS="$RUSTFLAGS -Ctarget-feature=+crt-static -Clink-args=/DEFAULTLIB:ucrt.lib -Clink-args=/NODEFAULTLIB:libucrt.lib" >> "$GITHUB_ENV"
+  shell: bash
