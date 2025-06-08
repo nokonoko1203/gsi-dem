@@ -54,7 +54,7 @@ crate-type = ["rlib"]
 
 [features]
 default = []
-bundled = ["gdal/bundled"]
+bundled = ["gdal-sys/bundled", "gdal-src", "gdal-src/driver_sqlite"]
 
 [dependencies]
 anyhow.workspace = true
@@ -65,6 +65,9 @@ thiserror.workspace = true
 tracing.workspace = true
 zip.workspace = true
 
+gdal-src = { version = "0.2.1", optional = true }
+gdal-sys = "0.11.0"
+
 [dev-dependencies]
 tempfile.workspace = true
 
@@ -72,7 +75,3 @@ tempfile.workspace = true
 [profile.dist]
 inherits = "release"
 lto = "thin"
-
-# TODO: remove this when the pull request gets merged into the upstream
-[patch.crates-io]
-gdal = { git = "https://github.com/yutannihilation/gdal-rs", branch = "feat/expose-bundled-feature" }
